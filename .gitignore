@@ -1,0 +1,16 @@
+# Supabase Admin Scripts & Secrets
+upload_to_supabase.py
+.env
+
+# Raw Data & JSON Dumps
+raw_fc25_data.csv
+all_players.csv
+fc_base_800_players.json
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# Expo/React Native Defaults
+node_modules/
+.expo/
