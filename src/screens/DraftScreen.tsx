@@ -12,7 +12,7 @@ import { PlayerCard } from '../components/Card/PlayerCard';
 import { useDraft } from '../hooks/useDraft';
 
 const DraftScreen: React.FC = () => {
-  const { squad, selectedIds, loading, error, generateDraft, toggleSelection } = useDraft();
+  const { squad, selectedIds, selectedSquad, loading, error, generateDraft, toggleSelection, clearSelection } = useDraft();
 
   const selectedCount = selectedIds.length;
 
@@ -21,7 +21,7 @@ const DraftScreen: React.FC = () => {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Draft Squad</Text>
-          <Text style={styles.subtitle}>Select the best 11 players from your draft.</Text>
+          <Text style={styles.subtitle}>Pick the best players and lock in your starting 11.</Text>
         </View>
 
         <Pressable
@@ -38,9 +38,29 @@ const DraftScreen: React.FC = () => {
       </View>
 
       <View style={styles.statusHeader}>
-        <Text style={styles.statusLabel}>Selected</Text>
-        <Text style={styles.statusValue}>{selectedCount}/11</Text>
+        <View>
+          <Text style={styles.statusLabel}>Selected Squad</Text>
+          <Text style={styles.statusValue}>{selectedCount}/11</Text>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed, selectedCount === 0 && styles.buttonDisabled]}
+          onPress={clearSelection}
+          disabled={selectedCount === 0}
+        >
+          <Text style={styles.clearButtonText}>Clear</Text>
+        </Pressable>
       </View>
+
+      {selectedCount > 0 && (
+        <View style={styles.selectedChips}>
+          {selectedSquad.map((player) => (
+            <View key={player.id} style={styles.chip}>
+              <Text style={styles.chipText}>{player.name}</Text>
+            </View>
+          ))}
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.statusContainer}>
@@ -129,6 +149,33 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '700',
+  },
+  clearButton: {
+    backgroundColor: '#2a2a2a',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  selectedChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 16,
+  },
+  chip: {
+    backgroundColor: '#1f1f1f',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  chipText: {
+    color: '#fff',
+    fontSize: 12,
   },
   statusContainer: {
     flex: 1,

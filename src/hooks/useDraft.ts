@@ -70,8 +70,15 @@ export const useDraft = () => {
       if (current.includes(playerId)) {
         return current.filter((id) => id !== playerId);
       }
+      if (current.length >= TARGET_SQUAD_SIZE) {
+        return current;
+      }
       return [...current, playerId];
     });
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedIds([]);
   }, []);
 
   const selectedSquad = useMemo(
@@ -87,5 +94,6 @@ export const useDraft = () => {
     error,
     generateDraft,
     toggleSelection,
+    clearSelection,
   } as const;
 };
