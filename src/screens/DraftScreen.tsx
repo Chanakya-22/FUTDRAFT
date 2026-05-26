@@ -44,7 +44,7 @@ const DraftScreen: React.FC = () => {
         </View>
 
         <Pressable
-          style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed, selectedCount === 0 && styles.buttonDisabled]}
           onPress={clearSelection}
           disabled={selectedCount === 0}
         >
