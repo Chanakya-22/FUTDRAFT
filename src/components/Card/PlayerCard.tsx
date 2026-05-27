@@ -1,5 +1,5 @@
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Player } from '../../types';
 
 interface PlayerCardProps {
@@ -22,9 +22,17 @@ const labels: Record<string, string> = {
   physical: 'PHY',
 };
 
-export const PlayerCard: React.FC<PlayerCardProps> = ({ player, selected = false, onPress }) => {
-  const imageFallback = 'https://via.placeholder.com/400x400?text=No+Image';
+const getTierLabel = (rating: number): string => {
+  if (rating >= 88) {
+    return 'Elite';
+  }
+  if (rating >= 86) {
+    return 'High';
+  }
+  return 'Standard';
+};
 
+export const PlayerCard: React.FC<PlayerCardProps> = ({ player, selected = false, onPress }) => {
   return (
     <Pressable
       onPress={onPress}
@@ -37,26 +45,27 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, selected = false
     >
       <View style={styles.topSection}>
         <View style={styles.avatarContainer}>
-          <Image
-            source={{ uri: player.image_url || imageFallback }}
-            style={styles.avatar}
-            resizeMode="cover"
-          />
+          <View style={styles.avatarPlaceholder} />
         </View>
+
         <View style={styles.titleColumn}>
           <Text style={styles.name} numberOfLines={1}>
             {player.name}
           </Text>
-          <View style={styles.metaRow}>
-            <View style={styles.metaBadge}>
-              <Text style={styles.metaText}>{player.position}</Text>
+          <View style={styles.tierRow}>
+            <View style={styles.tierBadge}>
+              <Text style={styles.tierText}>{getTierLabel(player.rating)}</Text>
             </View>
-            <Text style={styles.clubText} numberOfLines={1}>
-              {player.club}
-            </Text>
+            <View style={styles.positionBadge}>
+              <Text style={styles.positionText}>{player.position}</Text>
+            </View>
           </View>
+          <Text style={styles.clubText} numberOfLines={1}>
+            {player.club}
+          </Text>
           <Text style={styles.nationText}>{player.nation}</Text>
         </View>
+
         <View style={styles.ratingBox}>
           <Text style={styles.ratingLabel}>OVR</Text>
           <Text style={styles.ratingValue}>{player.rating}</Text>
@@ -107,13 +116,16 @@ const styles = StyleSheet.create({
     width: 84,
     height: 108,
     borderRadius: 16,
-    overflow: 'hidden',
     backgroundColor: '#222',
     marginRight: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  avatar: {
-    width: '100%',
-    height: '100%',
+  avatarPlaceholder: {
+    width: 60,
+    height: 80,
+    borderRadius: 12,
+    backgroundColor: '#2f2f2f',
   },
   titleColumn: {
     flex: 1,
@@ -125,29 +137,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 6,
   },
-  metaRow: {
+  tierRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  metaBadge: {
-    backgroundColor: '#272727',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
     marginBottom: 6,
+  },
+  tierBadge: {
+    backgroundColor: '#1f1f1f',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     marginRight: 8,
   },
-  metaText: {
+  tierText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  positionBadge: {
+    backgroundColor: '#272727',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  positionText: {
+    color: '#d9d9d9',
+    fontSize: 11,
     fontWeight: '600',
   },
   clubText: {
-    color: '#ddd',
+    color: '#ccc',
     fontSize: 12,
-    marginBottom: 6,
-    flexShrink: 1,
+    marginBottom: 4,
   },
   nationText: {
     color: '#aaa',
