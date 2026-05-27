@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { supabase } from '../api/supabaseClient';
 import { Player } from '../types';
 
@@ -20,9 +20,10 @@ const FORMATION_REQUIREMENTS: FormationRequirement[] = [
   { name: 'Attackers', positions: ['ST', 'LW', 'RW'], count: 3 },
 ];
 
-const TIER_THRESHOLDS = {
+const TIER_THRESHOLDS: Record<RatingTier, number> = {
   high: 85,
   mid: 75,
+  base: 0,
 };
 
 const getRatingTier = (player: Player): RatingTier => {
@@ -35,7 +36,7 @@ const getRatingTier = (player: Player): RatingTier => {
   return 'base';
 };
 
-const bucketPlayers = (players: Player[]) => {
+const bucketPlayers = (players: Player[]): Record<RatingTier, Player[]> => {
   const buckets: Record<RatingTier, Player[]> = {
     high: [],
     mid: [],
@@ -49,14 +50,15 @@ const bucketPlayers = (players: Player[]) => {
   return buckets;
 };
 
-const getRandomElement = <T,>(items: T[]): T | null => {
+const getRandomElement = <T,>(items: readonly T[]): T | null => {
   if (items.length === 0) {
     return null;
   }
   return items[Math.floor(Math.random() * items.length)];
 };
 
-const removePlayerById = (players: Player[], id: number) => players.filter((player) => player.id !== id);
+const removePlayerById = (players: readonly Player[], id: number): Player[] =>
+  players.filter((player) => player.id !== id);
 
 const createDistributedSample = (players: Player[], count: number): Player[] => {
   const buckets = bucketPlayers(players);
@@ -166,10 +168,21 @@ const sortByPositionGroup = (players: Player[]): Player[] => {
   });
 };
 
-export const useDraft = () => {
+interface UseDraftResult {
+  squad: Player[];
+  selectedIds: number[];
+  selectedSquad: Player[];
+  loading: boolean;
+  error: string | null;
+  generateDraft: () => Promise<void>;
+  toggleSelection: (playerId: number) => void;
+  clearSelection: () => void;
+}
+
+export const useDraft = (): UseDraftResult => {
   const [squad, setSquad] = useState<Player[]>([]);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const generateDraft = useCallback(async () => {
@@ -202,12 +215,12 @@ export const useDraft = () => {
       }
 
       setSquad(finalSquad);
-      setSelectedIds([]);
+      setSelectedIds(() => []);
     } catch (catchError: unknown) {
       const message = catchError instanceof Error ? catchError.message : 'Drafting failed';
       setError(message);
-      setSquad([]);
-      setSelectedIds([]);
+      setSquad(() => []);
+      setSelectedIds(() => []);
     } finally {
       setLoading(false);
     }
@@ -218,21 +231,21 @@ export const useDraft = () => {
       if (current.includes(playerId)) {
         return current.filter((id) => id !== playerId);
       }
+
       if (current.length >= TARGET_SQUAD_SIZE) {
         return current;
       }
+
       return [...current, playerId];
     });
   }, []);
 
   const clearSelection = useCallback(() => {
-    setSelectedIds([]);
+    setError(null);
+    setSelectedIds(() => []);
   }, []);
 
-  const selectedSquad = useMemo(
-    () => squad.filter((player) => selectedIds.includes(player.id)),
-    [squad, selectedIds],
-  );
+  const selectedSquad = squad.filter((player) => selectedIds.includes(player.id));
 
   return {
     squad,
@@ -243,5 +256,5 @@ export const useDraft = () => {
     generateDraft,
     toggleSelection,
     clearSelection,
-  } as const;
+  };
 };

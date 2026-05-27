@@ -23,7 +23,7 @@ const DraftScreen: React.FC = () => {
     clearSelection,
   } = useDraft();
 
-  const selectedCount = selectedIds.length;
+  const hasSelection = selectedIds.length > 0;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -49,10 +49,10 @@ const DraftScreen: React.FC = () => {
           style={({ pressed }) => [
             styles.secondaryButton,
             pressed && styles.buttonPressed,
-            selectedCount === 0 && styles.buttonDisabled,
+            !hasSelection && styles.buttonDisabled,
           ]}
           onPress={clearSelection}
-          disabled={selectedCount === 0}
+          disabled={!hasSelection}
         >
           <Text style={styles.secondaryButtonText}>Clear</Text>
         </Pressable>
@@ -61,16 +61,16 @@ const DraftScreen: React.FC = () => {
       <View style={styles.statusHeader}>
         <View>
           <Text style={styles.statusLabel}>Selected Squad</Text>
-          <Text style={styles.statusValue}>{selectedCount}/11</Text>
+          <Text style={styles.statusValue}>{selectedIds.length}/11</Text>
         </View>
 
         <Text style={styles.statusCaption}>Tap a card to lock or unlock players.</Text>
       </View>
 
-      {selectedCount > 0 && (
+      {hasSelection && (
         <View style={styles.selectedChips}>
           {selectedSquad.map((player) => (
-            <View key={player.id} style={styles.chip}>
+            <View key={player.id.toString()} style={styles.chip}>
               <Text style={styles.chipText}>{player.name}</Text>
             </View>
           ))}
