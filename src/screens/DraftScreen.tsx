@@ -12,21 +12,30 @@ import { PlayerCard } from '../components/Card/PlayerCard';
 import { useDraft } from '../hooks/useDraft';
 
 const DraftScreen: React.FC = () => {
-  const { squad, selectedIds, selectedSquad, loading, error, generateDraft, toggleSelection, clearSelection } = useDraft();
+  const {
+    squad,
+    selectedIds,
+    selectedSquad,
+    loading,
+    error,
+    generateDraft,
+    toggleSelection,
+    clearSelection,
+  } = useDraft();
 
   const selectedCount = selectedIds.length;
 
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.title}>Draft Squad</Text>
-          <Text style={styles.subtitle}>Pick the best players and lock in your starting 11.</Text>
-        </View>
+        <Text style={styles.title}>Draft Squad</Text>
+        <Text style={styles.subtitle}>Pick the best players and lock in your starting 11.</Text>
+      </View>
 
+      <View style={styles.controlSection}>
         <Pressable
           style={({ pressed }) => [
-            styles.button,
+            styles.primaryButton,
             pressed && styles.buttonPressed,
             loading && styles.buttonDisabled,
           ]}
@@ -34,6 +43,18 @@ const DraftScreen: React.FC = () => {
           disabled={loading}
         >
           <Text style={styles.buttonText}>Draft New Squad</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            pressed && styles.buttonPressed,
+            selectedCount === 0 && styles.buttonDisabled,
+          ]}
+          onPress={clearSelection}
+          disabled={selectedCount === 0}
+        >
+          <Text style={styles.secondaryButtonText}>Clear</Text>
         </Pressable>
       </View>
 
@@ -43,13 +64,7 @@ const DraftScreen: React.FC = () => {
           <Text style={styles.statusValue}>{selectedCount}/11</Text>
         </View>
 
-        <Pressable
-          style={({ pressed }) => [styles.clearButton, pressed && styles.buttonPressed, selectedCount === 0 && styles.buttonDisabled]}
-          onPress={clearSelection}
-          disabled={selectedCount === 0}
-        >
-          <Text style={styles.clearButtonText}>Clear</Text>
-        </Pressable>
+        <Text style={styles.statusCaption}>Tap a card to lock or unlock players.</Text>
       </View>
 
       {selectedCount > 0 && (
@@ -101,12 +116,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0d0d0d',
     paddingHorizontal: 16,
+    paddingTop: 20,
+    paddingBottom: 16,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 18,
+    marginBottom: 16,
   },
   title: {
     color: '#fff',
@@ -116,16 +130,36 @@ const styles = StyleSheet.create({
   subtitle: {
     color: '#bbb',
     fontSize: 14,
-    marginTop: 4,
+    lineHeight: 20,
+    marginTop: 6,
   },
-  button: {
+  controlSection: {
+    backgroundColor: '#131313',
+    borderRadius: 18,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
+    padding: 16,
+  },
+  primaryButton: {
+    flex: 1,
     backgroundColor: '#1f8cff',
     borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryButton: {
+    flex: 1,
+    backgroundColor: '#2a2a2a',
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   buttonPressed: {
-    opacity: 0.9,
+    opacity: 0.88,
   },
   buttonDisabled: {
     opacity: 0.5,
@@ -135,11 +169,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  secondaryButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   statusHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   statusLabel: {
     color: '#bbb',
@@ -150,21 +189,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
-  clearButton: {
-    backgroundColor: '#2a2a2a',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  clearButtonText: {
-    color: '#fff',
+  statusCaption: {
+    color: '#999',
     fontSize: 12,
-    fontWeight: '700',
   },
   selectedChips: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     marginBottom: 16,
+    gap: 8,
   },
   chip: {
     backgroundColor: '#1f1f1f',
