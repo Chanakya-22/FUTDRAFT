@@ -24,6 +24,7 @@ const DraftScreen: React.FC = () => {
   } = useDraft();
 
   const hasSelection = selectedIds.length > 0;
+  const hasSquad = squad.length > 0;
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -49,10 +50,10 @@ const DraftScreen: React.FC = () => {
           style={({ pressed }) => [
             styles.secondaryButton,
             pressed && styles.buttonPressed,
-            !hasSelection && styles.buttonDisabled,
+            !hasSquad && styles.buttonDisabled,
           ]}
           onPress={clearSelection}
-          disabled={!hasSelection}
+          disabled={!hasSquad}
         >
           <Text style={styles.secondaryButtonText}>Clear</Text>
         </Pressable>

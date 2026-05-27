@@ -241,8 +241,11 @@ export const useDraft = (): UseDraftResult => {
   }, []);
 
   const clearSelection = useCallback(() => {
+    // Reset any error state and clear both the selection and the current squad.
+    // Use functional setters to ensure immutable updates and fresh state.
     setError(null);
     setSelectedIds(() => []);
+    setSquad(() => []);
   }, []);
 
   const selectedSquad = squad.filter((player) => selectedIds.includes(player.id));
