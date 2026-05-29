@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { supabase } from '../api/supabaseClient';
 import { Player } from '../types';
 
-export type DraftStatus = 'idle' | 'drafting' | 'finished';
+export type DraftStatus = 'idle' | 'drafting' | 'finished' | 'error';
 
 const SLOT_POSITION_MAP: ReadonlyArray<readonly string[]> = [
   ['GK'],
@@ -133,6 +133,8 @@ const fetchPlayersForSlot = async (
   let query = supabase.from('players').select('*');
   if (positions.length > 0) {
     query = query.in('position', positions);
+  } else {
+    query = query.order('rating', { ascending: false }).limit(1000);
   }
 
   if (excludedIds.length > 0) {
@@ -168,6 +170,7 @@ interface UseDraftResult {
   selectPlayer: (player: Player) => Promise<void>;
   swapPlayers: (playerAId: number, playerBId: number) => void;
   restartDraft: () => Promise<void>;
+  retryGenerateChoicesForSlot: () => Promise<void>;
 }
 
 export const useDraft = (): UseDraftResult => {
@@ -191,14 +194,14 @@ export const useDraft = (): UseDraftResult => {
   }, []);
 
   const generateChoicesForSlot = useCallback(
-    async (index: number) => {
+    async (index: number, excludedIds: number[]) => {
       const positions = SLOT_POSITION_MAP[index];
       setLoading(true);
       setError(null);
 
       try {
-        const players = await fetchPlayersForSlot(positions, draftedPlayerIds);
-        const filtered = players.filter((player) => !draftedPlayerIds.includes(player.id));
+        const players = await fetchPlayersForSlot(positions, excludedIds);
+        const filtered = players.filter((player) => !excludedIds.includes(player.id));
         const sampled = sampleUniquePlayers(filtered, CHOICE_COUNT);
 
         if (sampled.length < CHOICE_COUNT) {
@@ -210,16 +213,12 @@ export const useDraft = (): UseDraftResult => {
         const message = fetchError instanceof Error ? fetchError.message : 'Draft generation failed.';
         setError(message);
         setCurrentChoices([]);
-        setDraftStatus('idle');
-        setCurrentSlotIndex(0);
-        setStartingXI([]);
-        setBench([]);
-        setDraftedPlayerIds([]);
+        setDraftStatus('error');
       } finally {
         setLoading(false);
       }
     },
-    [draftedPlayerIds],
+    [],
   );
 
   const startDraft = useCallback(async () => {
@@ -228,7 +227,7 @@ export const useDraft = (): UseDraftResult => {
     setCurrentSlotIndex(0);
     setStartingXI([]);
     setBench([]);
-    await generateChoicesForSlot(0);
+    await generateChoicesForSlot(0, []);
   }, [clearState, generateChoicesForSlot]);
 
   const selectPlayer = useCallback(
@@ -238,14 +237,15 @@ export const useDraft = (): UseDraftResult => {
       }
 
       const nextSlotIndex = currentSlotIndex + 1;
+      const newDraftedIds = [...draftedPlayerIds, player.id];
 
       if (currentSlotIndex < STARTING_COUNT) {
-        setStartingXI((current) => [...current, player]);
+        setStartingXI((current: Player[]) => [...current, player]);
       } else {
-        setBench((current) => [...current, player]);
+        setBench((current: Player[]) => [...current, player]);
       }
 
-      setDraftedPlayerIds((current) => [...current, player.id]);
+      setDraftedPlayerIds(newDraftedIds);
 
       if (nextSlotIndex >= STARTING_COUNT + BENCH_COUNT) {
         setCurrentSlotIndex(nextSlotIndex);
@@ -255,17 +255,17 @@ export const useDraft = (): UseDraftResult => {
       }
 
       setCurrentSlotIndex(nextSlotIndex);
-      await generateChoicesForSlot(nextSlotIndex);
+      await generateChoicesForSlot(nextSlotIndex, newDraftedIds);
     },
-    [currentSlotIndex, draftStatus, generateChoicesForSlot, loading],
+    [currentSlotIndex, draftStatus, draftedPlayerIds, generateChoicesForSlot, loading],
   );
 
   const swapPlayers = useCallback(
     (playerAId: number, playerBId: number) => {
-      const startIndexA = startingXI.findIndex((player) => player.id === playerAId);
-      const startIndexB = startingXI.findIndex((player) => player.id === playerBId);
-      const benchIndexA = bench.findIndex((player) => player.id === playerAId);
-      const benchIndexB = bench.findIndex((player) => player.id === playerBId);
+      const startIndexA = startingXI.findIndex((player: Player) => player.id === playerAId);
+      const startIndexB = startingXI.findIndex((player: Player) => player.id === playerBId);
+      const benchIndexA = bench.findIndex((player: Player) => player.id === playerAId);
+      const benchIndexB = bench.findIndex((player: Player) => player.id === playerBId);
 
       const isAInStart = startIndexA !== -1;
       const isBInStart = startIndexB !== -1;
@@ -296,6 +296,11 @@ export const useDraft = (): UseDraftResult => {
     await startDraft();
   }, [clearState, startDraft]);
 
+  const retryGenerateChoicesForSlot = useCallback(async () => {
+    setDraftStatus('drafting');
+    await generateChoicesForSlot(currentSlotIndex, draftedPlayerIds);
+  }, [currentSlotIndex, draftedPlayerIds, generateChoicesForSlot]);
+
   return {
     draftStatus,
     currentSlotIndex,
@@ -308,5 +313,6 @@ export const useDraft = (): UseDraftResult => {
     selectPlayer,
     swapPlayers,
     restartDraft,
+    retryGenerateChoicesForSlot,
   };
 };

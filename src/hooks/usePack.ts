@@ -25,10 +25,10 @@ const getTierForRoll = (roll: number): Tier => {
   return 'base';
 };
 
-const addTierFilter = (
-  query: ReturnType<typeof supabase.from<Player>>,
+const addTierFilter = <T extends { gte: any; lte: any; lt: any }>(
+  query: T,
   tier: Tier,
-) => {
+): T => {
   if (tier === 'high') {
     return query.gte('rating', 88);
   }
@@ -39,7 +39,7 @@ const addTierFilter = (
 };
 
 const selectRandomPlayerForTier = async (tier: Tier): Promise<Player> => {
-  let countQuery = supabase.from<Player>('players').select('id', { count: 'exact' });
+  let countQuery = supabase.from('players').select('id', { count: 'exact' });
   countQuery = addTierFilter(countQuery, tier);
 
   const countResp = await countQuery;
@@ -58,7 +58,7 @@ const selectRandomPlayerForTier = async (tier: Tier): Promise<Player> => {
   }
 
   const offset = Math.floor(Math.random() * total);
-  let rowQuery = supabase.from<Player>('players').select('*').range(offset, offset);
+  let rowQuery = supabase.from('players').select('*').range(offset, offset);
   rowQuery = addTierFilter(rowQuery, tier);
 
   const rowResp = await rowQuery;

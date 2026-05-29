@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { useDraft } from '../hooks/useDraft';
+import { Player } from '../types';
 
 const getSlotLabel = (slotIndex: number): string => {
   if (slotIndex === 0) {
@@ -43,22 +44,34 @@ const DraftScreen: React.FC = () => {
   } = useDraft();
 
   const [selectedSwapId, setSelectedSwapId] = useState<number | null>(null);
+  const [selectedSwapSource, setSelectedSwapSource] = useState<'starter' | 'bench' | null>(null);
   const isDrafting = draftStatus === 'drafting';
   const isFinished = draftStatus === 'finished';
 
   const handleSwapPress = (playerId: number) => {
     if (selectedSwapId === playerId) {
       setSelectedSwapId(null);
+      setSelectedSwapSource(null);
       return;
     }
 
+    const currentSource = startingXI.find((player) => player.id === playerId) ? 'starter' : 'bench';
+
     if (selectedSwapId === null) {
       setSelectedSwapId(playerId);
+      setSelectedSwapSource(currentSource);
+      return;
+    }
+
+    if (selectedSwapSource === currentSource) {
+      setSelectedSwapId(null);
+      setSelectedSwapSource(null);
       return;
     }
 
     swapPlayers(selectedSwapId, playerId);
     setSelectedSwapId(null);
+    setSelectedSwapSource(null);
   };
 
   const pickCounter = useMemo(() => {
@@ -97,19 +110,19 @@ const DraftScreen: React.FC = () => {
 
       <View style={styles.actionRow}>
         <Pressable
-          style={({ pressed }) => [
+          style={({ pressed }: { pressed: boolean }) => [
             styles.primaryButton,
             pressed && styles.buttonPressed,
-            (loading || isDrafting) && styles.buttonDisabled,
+            (loading || isDrafting || isFinished) && styles.buttonDisabled,
           ]}
           onPress={startDraft}
-          disabled={loading || isDrafting}
+          disabled={loading || isDrafting || isFinished}
         >
           <Text style={styles.buttonText}>{isDrafting ? 'Drafting...' : 'Start Draft'}</Text>
         </Pressable>
 
         <Pressable
-          style={({ pressed }) => [
+          style={({ pressed }: { pressed: boolean }) => [
             styles.secondaryButton,
             pressed && styles.buttonPressed,
             (!isFinished && !isDrafting) && styles.buttonDisabled,
@@ -145,11 +158,11 @@ const DraftScreen: React.FC = () => {
         <View style={styles.draftPane}>
           <FlatList
             data={currentChoices}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item: Player) => item.id.toString()}
             horizontal
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.choiceList}
-            renderItem={({ item }) => (
+            renderItem={({ item }: { item: Player }) => (
               <View style={styles.choiceCardWrapper}>
                 <PlayerCard player={item} onPress={() => selectPlayer(item)} />
               </View>
@@ -214,7 +227,7 @@ const DraftScreen: React.FC = () => {
           </ScrollView>
 
           <View style={styles.footerButtons}>
-            <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={restartDraft}>
+            <Pressable style={({ pressed }: { pressed: boolean }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={restartDraft}>
               <Text style={styles.buttonText}>Clear / Restart</Text>
             </Pressable>
             <Pressable style={[styles.secondaryButton, styles.disabledButton]} disabled>
