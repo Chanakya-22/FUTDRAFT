@@ -49,7 +49,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, selected = false
         </View>
 
         <View style={styles.titleColumn}>
-          <Text style={styles.name} numberOfLines={1}>
+          <Text style={styles.name} numberOfLines={1} ellipsizeMode="tail">
             {player.name}
           </Text>
           <View style={styles.tierRow}>
@@ -60,7 +60,7 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, selected = false
               <Text style={styles.positionText}>{player.position}</Text>
             </View>
           </View>
-          <Text style={styles.clubText} numberOfLines={1}>
+          <Text style={styles.clubText} numberOfLines={1} ellipsizeMode="tail">
             {player.club}
           </Text>
           <Text style={styles.nationText}>{player.nation}</Text>
@@ -101,8 +101,9 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   selectedCard: {
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: '#1f8cff',
+    borderRadius: 10,
   },
   pressedCard: {
     opacity: 0.92,
@@ -130,6 +131,7 @@ const styles = StyleSheet.create({
   titleColumn: {
     flex: 1,
     justifyContent: 'center',
+    flexShrink: 1,
   },
   name: {
     color: '#fff',
