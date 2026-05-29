@@ -9,58 +9,57 @@ export interface MatchEvent {
 }
 
 const CPU_POSITIONS = ['GK', 'RB', 'CB', 'CB', 'LB', 'RM', 'CM', 'LM', 'RW', 'ST', 'LW'] as const;
-const BASE_RATING = 85;
+const MIN_CPU_STAT = 75;
+const MAX_CPU_STAT = 95;
+const NEUTRAL_THRESHOLD = 0.72;
 const AMBIENT_EVENT_CHANCE = 0.05;
-const NEUTRAL_THRESHOLD = 0.8;
+
+const randomBetween = (min: number, max: number): number =>
+  Math.floor(Math.random() * (max - min + 1)) + min;
+
+const calculatePlayerOVR = (player: Player): number =>
+  Math.round(
+    (player.pace + player.shooting + player.passing + player.dribbling + player.defending + player.physical) /
+      6,
+  );
 
 export const generateCPUTeam = (): Player[] =>
-  CPU_POSITIONS.map((position, index) => ({
-    id: 3000 + index,
-    name: `CPU ${position}`,
-    club: 'CPU FC',
-    nation: 'CPU',
-    position,
-    rating: BASE_RATING,
-    pace: BASE_RATING,
-    shooting: BASE_RATING,
-    passing: BASE_RATING,
-    dribbling: BASE_RATING,
-    defending: BASE_RATING,
-    physical: BASE_RATING,
-    image_url: '',
-  }));
+  CPU_POSITIONS.map((position, index) => {
+    const pace = randomBetween(MIN_CPU_STAT, MAX_CPU_STAT);
+    const shooting = randomBetween(MIN_CPU_STAT, MAX_CPU_STAT);
+    const passing = randomBetween(MIN_CPU_STAT, MAX_CPU_STAT);
+    const dribbling = randomBetween(MIN_CPU_STAT, MAX_CPU_STAT);
+    const defending = randomBetween(MIN_CPU_STAT, MAX_CPU_STAT);
+    const physical = randomBetween(MIN_CPU_STAT, MAX_CPU_STAT);
 
-const applyMentalityBoost = (stat: number, mentality: Mentality, statType: 'attack' | 'defend'): number => {
-  if (mentality === 'attack' && statType === 'attack') {
-    return stat * 1.15;
-  }
-  if (mentality === 'attack' && statType === 'defend') {
-    return stat * 0.9;
-  }
-  if (mentality === 'defense' && statType === 'defend') {
-    return stat * 1.15;
-  }
-  if (mentality === 'defense' && statType === 'attack') {
-    return stat * 0.9;
-  }
-  return stat;
-};
+    const player: Player = {
+      id: 3000 + index,
+      name: `CPU ${position}`,
+      club: 'CPU FC',
+      nation: 'CPU',
+      position,
+      pace,
+      shooting,
+      passing,
+      dribbling,
+      defending,
+      physical,
+      rating: 0,
+      image_url: '',
+    };
 
-const getRatingValue = (player: Player, type: 'attack' | 'defend', mentality: Mentality): number => {
-  if (type === 'attack') {
-    return applyMentalityBoost(player.pace + player.shooting, mentality, 'attack');
-  }
-  return applyMentalityBoost(player.defending + player.physical, mentality, 'defend');
-};
+    return {
+      ...player,
+      rating: calculatePlayerOVR(player),
+    };
+  });
 
-const getMentalityModifiers = (mentality: Mentality) => {
-  if (mentality === 'attack') {
-    return { attackBias: 0.2 };
+export const calculateTeamOVR = (squad: Player[]): number => {
+  if (squad.length === 0) {
+    return 0;
   }
-  if (mentality === 'defense') {
-    return { attackBias: -0.2 };
-  }
-  return { attackBias: 0 };
+  const total = squad.reduce((acc, player) => acc + player.rating, 0);
+  return Math.round(total / squad.length);
 };
 
 const pickRandom = <T,>(items: T[]): T | null => {
@@ -100,60 +99,84 @@ export const evaluateEncounter = (
     };
   }
 
-  const modifiers = getMentalityModifiers(mentality);
-  const isUserAttack = Math.random() < 0.5 + modifiers.attackBias;
+  const userAttackChance =
+    0.5 + (mentality === 'attack' ? 0.1 : mentality === 'defense' ? -0.1 : 0);
+  const isUserAttack = Math.random() < userAttackChance;
 
-  const userAttackers = findPlayersByPositionGroup(playerSquad, attackerPositions as unknown as readonly string[]);
-  const cpuAttackers = findPlayersByPositionGroup(cpuSquad, attackerPositions as unknown as readonly string[]);
-  const userDefenders = findPlayersByPositionGroup(playerSquad, defenderPositions as unknown as readonly string[]);
-  const cpuDefenders = findPlayersByPositionGroup(cpuSquad, defenderPositions as unknown as readonly string[]);
+  const userAttackers = findPlayersByPositionGroup(
+    playerSquad,
+    attackerPositions as unknown as readonly string[],
+  );
+  const cpuAttackers = findPlayersByPositionGroup(
+    cpuSquad,
+    attackerPositions as unknown as readonly string[],
+  );
+  const userDefenders = findPlayersByPositionGroup(
+    playerSquad,
+    defenderPositions as unknown as readonly string[],
+  );
+  const cpuDefenders = findPlayersByPositionGroup(
+    cpuSquad,
+    defenderPositions as unknown as readonly string[],
+  );
 
-  const attacker = pickRandom(isUserAttack ? userAttackers : cpuAttackers) ?? pickRandom(isUserAttack ? playerSquad : cpuSquad)!;
-  const defender = pickRandom(isUserAttack ? cpuDefenders : userDefenders) ?? pickRandom(isUserAttack ? cpuSquad : playerSquad)!;
+  const attacker =
+    pickRandom(isUserAttack ? userAttackers : cpuAttackers) ??
+    pickRandom(isUserAttack ? playerSquad : cpuSquad)!;
+  const defender =
+    pickRandom(isUserAttack ? cpuDefenders : userDefenders) ??
+    pickRandom(isUserAttack ? cpuSquad : playerSquad)!;
 
-  const userMentality = isUserAttack ? mentality : 'balanced';
-  const cpuMentality = isUserAttack ? 'balanced' : mentality;
+  const attackingTeamOVR = calculateTeamOVR(isUserAttack ? playerSquad : cpuSquad);
+  const defendingTeamOVR = calculateTeamOVR(isUserAttack ? cpuSquad : playerSquad);
+  const momentum = (attackingTeamOVR - defendingTeamOVR) * 0.5;
 
-  const attackPower = getRatingValue(attacker, 'attack', userMentality);
-  const defensePower = getRatingValue(defender, 'defend', cpuMentality);
-  const variance = (Math.random() - 0.5) * 10;
-  const result = attackPower - defensePower + variance;
+  const effectiveAttackerPAC = attacker.pace + randomBetween(0, 10);
+  const effectiveDefenderPAC = defender.pace + 8 + randomBetween(0, 10);
 
-  if (result >= 12) {
-    return {
-      type: 'goal',
-      team: isUserAttack ? 'user' : 'cpu',
-      message: isUserAttack
-        ? `${attacker.name} finds the net with composure.`
-        : `${attacker.name} slots one past the keeper for CPU.`,
-    };
-  }
-
-  if (result >= 0) {
+  if (effectiveDefenderPAC > effectiveAttackerPAC + 5) {
     return {
       type: 'save',
       team: isUserAttack ? 'cpu' : 'user',
       message: isUserAttack
-        ? `${attacker.name} goes close, but ${defender.name} blocks the chance.`
-        : `${defender.name} denies ${attacker.name} with a solid block.`,
+        ? `${defender.name} tracks back and wins the challenge cleanly.`
+        : `${defender.name} reads the run and snuffs out the attack.`,
     };
   }
 
-  if (result >= -12) {
+  let attackScore = attacker.shooting + attacker.physical * 0.3 + momentum + randomBetween(0, 15);
+  const defenseScore = defender.defending + defender.physical * 0.5 + randomBetween(0, 15);
+
+  if (mentality === 'attack' && isUserAttack) {
+    attackScore *= 1.1;
+  }
+
+  if (attackScore > defenseScore) {
     return {
-      type: 'miss',
+      type: 'goal',
       team: isUserAttack ? 'user' : 'cpu',
       message: isUserAttack
-        ? `${attacker.name} strikes wide under pressure.`
-        : `${attacker.name} fires high and wide.`,
+        ? `${attacker.name} breaks through and finishes clinically.`
+        : `${attacker.name} powers one beyond the keeper for CPU.`,
+    };
+  }
+
+  const margin = attackScore - defenseScore;
+  if (margin >= -3) {
+    return {
+      type: 'save',
+      team: isUserAttack ? 'cpu' : 'user',
+      message: isUserAttack
+        ? `${defender.name} makes a strong save to deny the chance.`
+        : `${defender.name} blocks the shot with excellent positioning.`,
     };
   }
 
   return {
-    type: 'save',
-    team: isUserAttack ? 'cpu' : 'user',
+    type: 'miss',
+    team: isUserAttack ? 'user' : 'cpu',
     message: isUserAttack
-      ? `${defender.name} makes a crucial interception.`
-      : `${defender.name} snuffs out the threat.`,
+      ? `${attacker.name} misses the target from a promising move.`
+      : `${attacker.name} cannot keep the effort on frame.`,
   };
 };

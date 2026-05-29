@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Player } from '../types';
-import { evaluateEncounter, generateCPUTeam, MatchEvent, Mentality } from '../engine/MatchMath';
+import { evaluateEncounter, Mentality } from '../engine/MatchMath';
+import { supabase } from '../api/supabaseClient';
 
 interface MatchScore {
   user: number;
@@ -8,6 +9,9 @@ interface MatchScore {
 }
 
 type MatchPhase = 'live' | 'halftime' | 'fulltime' | 'penalties';
+
+type PenaltyTurn = 'user_shoot' | 'user_save' | null;
+type PenaltyOutcome = 'goal' | 'miss' | 'pending';
 
 interface UseMatchSimResult {
   clock: number;
@@ -20,11 +24,14 @@ interface UseMatchSimResult {
   activePitch: Player[];
   activeBench: Player[];
   cpuTeam: Player[];
+  cpuLoading: boolean;
   subsRemaining: number;
   subModalOpen: boolean;
-  penaltyPhase: 'shooting' | 'selecting' | null;
+  penaltyTurn: PenaltyTurn;
   penaltyRound: number;
   penaltyShootout: { user: number; cpu: number };
+  userPenaltyLog: PenaltyOutcome[];
+  cpuPenaltyLog: PenaltyOutcome[];
   setMentality: (mentality: Mentality) => void;
   togglePause: () => void;
   openSubModal: () => void;
@@ -38,7 +45,16 @@ interface UseMatchSimResult {
 const MATCH_LENGTH = 90;
 const MAX_SUBS = 4;
 const TICK_MS = 1000;
-const ENCOUNTER_CHANCE = 0.2;
+const ENCOUNTER_CHANCE = 0.45;
+
+const shufflePlayers = <T,>(items: T[]): T[] => {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
 
 export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimResult => {
   const [clock, setClock] = useState(0);
@@ -50,12 +66,19 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   const [matchPhase, setMatchPhase] = useState<MatchPhase>('live');
   const [activePitch, setActivePitch] = useState<Player[]>(() => [...startingXI]);
   const [activeBench, setActiveBench] = useState<Player[]>(() => [...bench]);
-  const [cpuTeam] = useState<Player[]>(() => generateCPUTeam());
+  const [cpuTeam, setCpuTeam] = useState<Player[]>([]);
+  const [cpuLoading, setCpuLoading] = useState(true);
   const [subsRemaining, setSubsRemaining] = useState(MAX_SUBS);
   const [subModalOpen, setSubModalOpen] = useState(false);
-  const [penaltyPhase, setPenaltyPhase] = useState<'shooting' | 'selecting' | null>(null);
+  const [penaltyTurn, setPenaltyTurn] = useState<PenaltyTurn>(null);
   const [penaltyRound, setPenaltyRound] = useState(0);
   const [penaltyShootout, setPenaltyShootout] = useState({ user: 0, cpu: 0 });
+  const [userPenaltyLog, setUserPenaltyLog] = useState<PenaltyOutcome[]>(
+    Array(5).fill('pending'),
+  );
+  const [cpuPenaltyLog, setCpuPenaltyLog] = useState<PenaltyOutcome[]>(
+    Array(5).fill('pending'),
+  );
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const resetMatch = useCallback(() => {
@@ -70,10 +93,42 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     setActiveBench([...bench]);
     setSubsRemaining(MAX_SUBS);
     setSubModalOpen(false);
-    setPenaltyPhase(null);
+    setPenaltyTurn(null);
     setPenaltyRound(0);
     setPenaltyShootout({ user: 0, cpu: 0 });
+    setUserPenaltyLog(Array(5).fill('pending'));
+    setCpuPenaltyLog(Array(5).fill('pending'));
   }, [bench, startingXI]);
+
+  const fetchCpuTeam = useCallback(async () => {
+    setCpuLoading(true);
+    const { data, error } = await supabase
+      .from<Player>('players')
+      .select('*')
+      .gte('rating', 80)
+      .order('rating', { ascending: false })
+      .limit(200);
+
+    if (error || !data) {
+      setEvents((existing) => [
+        ...existing,
+        'Unable to load CPU squad from Supabase. Check connection.',
+      ]);
+      setCpuTeam([]);
+      setCpuLoading(false);
+      return;
+    }
+
+    const shuffled = shufflePlayers(data);
+    const selected = shuffled.slice(0, 11);
+    setCpuTeam(selected);
+    setCpuLoading(false);
+    setIsPaused(false);
+  }, []);
+
+  useEffect(() => {
+    fetchCpuTeam();
+  }, [fetchCpuTeam]);
 
   useEffect(() => {
     if (intervalRef.current) {
@@ -86,7 +141,7 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
 
     intervalRef.current = setInterval(() => {
       setClock((currentClock) => {
-        if (isPaused || currentClock >= MATCH_LENGTH) {
+        if (isPaused || cpuLoading || cpuTeam.length < 11 || currentClock >= MATCH_LENGTH) {
           return currentClock;
         }
 
@@ -103,27 +158,25 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
           setIsPaused(true);
           if (score.user === score.cpu) {
             setMatchPhase('penalties');
-            setPenaltyPhase('shooting');
+            setPenaltyTurn('user_shoot');
             setPenaltyRound(1);
-            setEvents((existing) => [...existing, "⚫ PENALTY SHOOTOUT BEGINS"]);
+            setEvents((existing) => [...existing, '⚫ PENALTY SHOOTOUT BEGINS']);
           } else {
             setMatchPhase('fulltime');
-            setEvents((existing) => [...existing, "🏁 FULL TIME"]);
+            setEvents((existing) => [...existing, '🏁 FULL TIME']);
           }
           return nextClock;
         }
 
         if (Math.random() < ENCOUNTER_CHANCE) {
           const encounter = evaluateEncounter(mentality, activePitch, cpuTeam);
-          if (encounter.type !== 'neutral') {
-            setEvents((existing) => [...existing, `${nextClock}' ${encounter.message}`]);
+          setEvents((existing) => [...existing, `${nextClock}' ${encounter.message}`]);
 
-            if (encounter.type === 'goal') {
-              setScore((previous) => ({
-                user: encounter.team === 'user' ? previous.user + 1 : previous.user,
-                cpu: encounter.team === 'cpu' ? previous.cpu + 1 : previous.cpu,
-              }));
-            }
+          if (encounter.type === 'goal') {
+            setScore((previous) => ({
+              user: encounter.team === 'user' ? previous.user + 1 : previous.user,
+              cpu: encounter.team === 'cpu' ? previous.cpu + 1 : previous.cpu,
+            }));
           }
         }
 
@@ -136,7 +189,7 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
         clearInterval(intervalRef.current);
       }
     };
-  }, [activePitch, cpuTeam, isPaused, matchPhase, mentality, score]);
+  }, [activePitch, cpuLoading, cpuTeam, isPaused, matchPhase, mentality, score]);
 
   const performSub = useCallback(
     (pitchPlayerId: number, benchPlayerId: number) => {
@@ -188,37 +241,76 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   }, []);
 
   const shootPenalty = useCallback(
-    (userDirection: 'LEFT' | 'MIDDLE' | 'RIGHT') => {
+    (direction: 'LEFT' | 'MIDDLE' | 'RIGHT') => {
+      if (!penaltyTurn) {
+        return;
+      }
+
       const directions = ['LEFT', 'MIDDLE', 'RIGHT'] as const;
-      const cpuDirection = directions[Math.floor(Math.random() * 3)];
-      const isGoal = userDirection !== cpuDirection;
+      const currentRoundIndex = Math.max(0, Math.min(4, penaltyRound - 1));
 
-      setPenaltyShootout((prev) => ({
-        user: isGoal ? prev.user + 1 : prev.user,
-        cpu: prev.cpu,
+      if (penaltyTurn === 'user_shoot') {
+        const cpuDive = directions[Math.floor(Math.random() * 3)];
+        const scored = direction !== cpuDive;
+        setUserPenaltyLog((current) =>
+          current.map((value, index) =>
+            index === currentRoundIndex ? (scored ? 'goal' : 'miss') : value,
+          ),
+        );
+        setPenaltyShootout((previous) => ({
+          user: scored ? previous.user + 1 : previous.user,
+          cpu: previous.cpu,
+        }));
+        setEvents((existing) => [
+          ...existing,
+          `Round ${penaltyRound} • User shoots ${direction} → CPU dives ${cpuDive} → ${
+            scored ? 'GOAL' : 'SAVED'
+          }`,
+        ]);
+        setPenaltyTurn('user_save');
+        return;
+      }
+
+      const cpuTarget = directions[Math.floor(Math.random() * 3)];
+      const saved = direction === cpuTarget;
+      setCpuPenaltyLog((current) =>
+        current.map((value, index) =>
+          index === currentRoundIndex ? (saved ? 'miss' : 'goal') : value,
+        ),
+      );
+      setPenaltyShootout((previous) => ({
+        user: previous.user,
+        cpu: saved ? previous.cpu : previous.cpu + 1,
       }));
-
-      const result = isGoal ? 'GOAL' : 'SAVED';
       setEvents((existing) => [
         ...existing,
-        `Round ${penaltyRound}: User shoots ${userDirection} → CPU dives ${cpuDirection} → ${result}`,
+        `Round ${penaltyRound} • CPU shoots ${cpuTarget} → User dives ${direction} → ${
+          saved ? 'SAVED' : 'GOAL'
+        }`,
       ]);
 
-      if (penaltyRound >= 5) {
-        if (penaltyShootout.user !== penaltyShootout.cpu) {
-          setPenaltyPhase(null);
-          setMatchPhase('fulltime');
-          const winner = penaltyShootout.user > penaltyShootout.cpu ? 'USER' : 'CPU';
-          setEvents((existing) => [...existing, `🏆 Penalty Shootout: ${winner} WINS`]);
-        } else {
-          setEvents((existing) => [...existing, "🔄 SUDDEN DEATH"]);
-          setPenaltyRound((r) => r + 1);
-        }
-      } else {
-        setPenaltyRound((r) => r + 1);
+      const isFinalRound = penaltyRound >= 5;
+      const nextPenaltyRound = penaltyRound + 1;
+      const currentUserScore = penaltyShootout.user;
+      const currentCpuScore = saved ? penaltyShootout.cpu : penaltyShootout.cpu + 1;
+
+      if (isFinalRound && currentUserScore !== currentCpuScore) {
+        setPenaltyTurn(null);
+        setMatchPhase('fulltime');
+        const winner = currentUserScore > currentCpuScore ? 'USER' : 'CPU';
+        setEvents((existing) => [...existing, `🏆 Penalty Shootout: ${winner} WINS`]);
+        setPenaltyRound(nextPenaltyRound);
+        return;
       }
+
+      if (isFinalRound && currentUserScore === currentCpuScore && penaltyRound === 5) {
+        setEvents((existing) => [...existing, '🔄 SUDDEN DEATH']);
+      }
+
+      setPenaltyRound(nextPenaltyRound);
+      setPenaltyTurn('user_shoot');
     },
-    [penaltyRound, penaltyShootout],
+    [penaltyRound, penaltyShootout, penaltyTurn],
   );
 
   return {
@@ -232,11 +324,14 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     activePitch,
     activeBench,
     cpuTeam,
+    cpuLoading,
     subsRemaining,
     subModalOpen,
-    penaltyPhase,
+    penaltyTurn,
     penaltyRound,
     penaltyShootout,
+    userPenaltyLog,
+    cpuPenaltyLog,
     setMentality,
     togglePause,
     openSubModal,

@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FlatList,
   Modal,
   Pressable,
   SafeAreaView,
@@ -11,6 +10,8 @@ import {
 } from 'react-native';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { useMatchSim } from '../hooks/useMatchSim';
+import { calculateTeamOVR } from '../engine/MatchMath';
+import { Player } from '../types';
 import { useSquad } from '../context/SquadContext';
 
 const mentalityOptions: Array<{ label: string; value: 'attack' | 'balanced' | 'defense' }> = [
@@ -32,9 +33,13 @@ const MatchScreen: React.FC = () => {
     subsRemaining,
     activePitch,
     activeBench,
-    penaltyPhase,
+    penaltyTurn,
     penaltyRound,
     penaltyShootout,
+    userPenaltyLog,
+    cpuPenaltyLog,
+    cpuTeam,
+    cpuLoading,
     subModalOpen,
     setMentality,
     togglePause,
@@ -44,10 +49,14 @@ const MatchScreen: React.FC = () => {
     resumeSecondHalf,
     shootPenalty,
   } = useMatchSim(startingXI, bench);
-
+  const [cpuModalOpen, setCpuModalOpen] = useState(false);
+  const [myModalOpen, setMyModalOpen] = useState(false);
   const [selectedPitchId, setSelectedPitchId] = useState<number | null>(null);
   const [selectedBenchId, setSelectedBenchId] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
+
+  const userOVR = useMemo(() => calculateTeamOVR(startingXI), [startingXI]);
+  const cpuOVR = useMemo(() => calculateTeamOVR(cpuTeam), [cpuTeam]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -71,6 +80,11 @@ const MatchScreen: React.FC = () => {
     }
   };
 
+  const openCpuModal = () => setCpuModalOpen(true);
+  const closeCpuModal = () => setCpuModalOpen(false);
+  const openMyModal = () => setMyModalOpen(true);
+  const closeMyModal = () => setMyModalOpen(false);
+
   if (startingXI.length === 0) {
     return (
       <SafeAreaView style={styles.screen}>
@@ -81,7 +95,20 @@ const MatchScreen: React.FC = () => {
     );
   }
 
-  if (matchPhase === 'penalties' && penaltyPhase === 'shooting') {
+  if (cpuLoading) {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.statusContainer}>
+          <Text style={styles.statusText}>Loading CPU squad...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (matchPhase === 'penalties' && penaltyTurn) {
+    const directionLabel = penaltyTurn === 'user_shoot' ? 'Choose a direction to shoot' : 'YOU ARE THE GOALKEEPER';
+    const rowLabel = penaltyTurn === 'user_shoot' ? 'Your shot' : 'Your save';
+
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.penaltyHeader}>
@@ -92,8 +119,35 @@ const MatchScreen: React.FC = () => {
           <Text style={styles.penaltyRound}>Round {penaltyRound}</Text>
         </View>
 
+        <View style={styles.penaltyTrackWrapper}>
+          <View style={styles.penaltyTrackRow}>
+            <Text style={styles.penaltyTrackLabel}>USER</Text>
+            {userPenaltyLog.map((status, index) => (
+              <View key={`user-${index}`} style={[
+                styles.penaltyDot,
+                status === 'goal' && styles.penaltyDotGoal,
+                status === 'miss' && styles.penaltyDotMiss,
+                status === 'pending' && styles.penaltyDotPending,
+              ]}
+              />
+            ))}
+          </View>
+          <View style={styles.penaltyTrackRow}>
+            <Text style={styles.penaltyTrackLabel}>CPU</Text>
+            {cpuPenaltyLog.map((status, index) => (
+              <View key={`cpu-${index}`} style={[
+                styles.penaltyDot,
+                status === 'goal' && styles.penaltyDotGoal,
+                status === 'miss' && styles.penaltyDotMiss,
+                status === 'pending' && styles.penaltyDotPending,
+              ]}
+              />
+            ))}
+          </View>
+        </View>
+
         <View style={styles.penaltyInstructions}>
-          <Text style={styles.instructionText}>Choose your direction</Text>
+          <Text style={styles.instructionText}>{directionLabel}</Text>
         </View>
 
         <View style={styles.penaltyButtonRow}>
@@ -120,7 +174,7 @@ const MatchScreen: React.FC = () => {
         </View>
 
         <View style={styles.penaltyEvents}>
-          <Text style={styles.penaltyEventsTitle}>Shootout Log</Text>
+          <Text style={styles.penaltyEventsTitle}>{rowLabel} Log</Text>
           <ScrollView style={styles.penaltyEventsList} ref={scrollRef} contentContainerStyle={{ paddingBottom: 12 }}>
             {events
               .filter((e) => e.includes('Round') || e.includes('Shootout'))
@@ -140,6 +194,7 @@ const MatchScreen: React.FC = () => {
       <View style={styles.scoreBox}>
         <View style={styles.scoreColumn}>
           <Text style={styles.scoreLabel}>USER</Text>
+          <Text style={styles.ovrBadge}>{userOVR} OVR</Text>
           <Text style={styles.scoreValue}>{score.user}</Text>
         </View>
         <View style={styles.clockContainer}>
@@ -147,6 +202,7 @@ const MatchScreen: React.FC = () => {
         </View>
         <View style={styles.scoreColumn}>
           <Text style={styles.scoreLabel}>CPU</Text>
+          <Text style={styles.ovrBadge}>{cpuOVR} OVR</Text>
           <Text style={styles.scoreValue}>{score.cpu}</Text>
         </View>
       </View>
@@ -179,7 +235,7 @@ const MatchScreen: React.FC = () => {
           ))}
         </View>
 
-        <View style={styles.actionRow}>
+          <View style={styles.actionRow}>
           <Pressable
             style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
             onPress={togglePause}
@@ -199,6 +255,20 @@ const MatchScreen: React.FC = () => {
           >
             <Text style={styles.actionButtonText}>Sub ({subsRemaining})</Text>
           </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+            onPress={openCpuModal}
+          >
+            <Text style={styles.actionButtonText}>View CPU Squad</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+            onPress={openMyModal}
+          >
+            <Text style={styles.actionButtonText}>View My Squad</Text>
+          </Pressable>
         </View>
       </View>
 
@@ -214,6 +284,55 @@ const MatchScreen: React.FC = () => {
               onPress={resumeSecondHalf}
             >
               <Text style={styles.resumeButtonText}>Resume Match</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={cpuModalOpen} transparent animationType="slide">
+        <View style={styles.modalBackground}>
+          <View style={styles.cpuModalContent}>
+            <Text style={styles.modalTitle}>CPU Squad</Text>
+            <Text style={styles.modalSubtitle}>Generated opponent squad with a {cpuOVR} OVR average.</Text>
+            <ScrollView style={styles.cpuModalList} contentContainerStyle={{ paddingBottom: 16 }}>
+              {cpuTeam.map((player) => (
+                <View key={player.id.toString()} style={styles.cpuCardWrapper}>
+                  <PlayerCard player={player} selected={false} />
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable
+              style={({ pressed }) => [styles.confirmButton, pressed && styles.buttonPressed]}
+              onPress={closeCpuModal}
+            >
+              <Text style={styles.confirmButtonText}>Close</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={myModalOpen} transparent animationType="slide">
+        <View style={styles.modalBackground}>
+          <View style={styles.cpuModalContent}>
+            <Text style={styles.modalTitle}>My Squad</Text>
+            <Text style={styles.modalSubtitle}>Starting XI and bench players from your drafted squad.</Text>
+            <ScrollView style={styles.cpuModalList} contentContainerStyle={{ paddingBottom: 16 }}>
+              {startingXI.map((player) => (
+                <View key={`my-${player.id}`} style={styles.cpuCardWrapper}>
+                  <PlayerCard player={player} selected={false} />
+                </View>
+              ))}
+              {bench.map((player) => (
+                <View key={`bench-${player.id}`} style={styles.cpuCardWrapper}>
+                  <PlayerCard player={player} selected={false} />
+                </View>
+              ))}
+            </ScrollView>
+            <Pressable
+              style={({ pressed }) => [styles.confirmButton, pressed && styles.buttonPressed]}
+              onPress={closeMyModal}
+            >
+              <Text style={styles.confirmButtonText}>Close</Text>
             </Pressable>
           </View>
         </View>
@@ -480,6 +599,46 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  penaltyTrackWrapper: {
+    marginBottom: 20,
+    padding: 14,
+    backgroundColor: '#121212',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
+  },
+  penaltyTrackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  penaltyTrackLabel: {
+    color: '#b3b3b3',
+    fontSize: 12,
+    fontWeight: '700',
+    width: 52,
+  },
+  penaltyDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    backgroundColor: '#303030',
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
+  },
+  penaltyDotGoal: {
+    backgroundColor: '#1f8cff',
+    borderColor: '#1f8cff',
+  },
+  penaltyDotMiss: {
+    backgroundColor: '#d32f2f',
+    borderColor: '#d32f2f',
+  },
+  penaltyDotPending: {
+    backgroundColor: '#303030',
+    borderColor: '#2a2a2a',
+  },
   penaltyInstructions: {
     alignItems: 'center',
     marginBottom: 20,
@@ -599,6 +758,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#2a2a2a',
+  },
+  ovrBadge: {
+    marginTop: 4,
+    backgroundColor: '#1a1a1a',
+    color: '#b3b3b3',
+    fontSize: 10,
+    fontWeight: '800',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#262626',
+  },
+  cpuModalContent: {
+    backgroundColor: '#0f0f0f',
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
+    maxHeight: '80%',
+  },
+  cpuModalList: {
+    maxHeight: 360,
+    marginBottom: 16,
+  },
+  cpuCardWrapper: {
+    marginBottom: 10,
   },
   cancelButtonText: {
     color: '#ffffff',
