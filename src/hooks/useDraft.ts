@@ -1,263 +1,318 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { supabase } from '../api/supabaseClient';
 import { Player } from '../types';
 
-const TARGET_SQUAD_SIZE = 11;
-const MAX_ATTEMPTS = 3;
+export type DraftStatus = 'idle' | 'drafting' | 'finished' | 'error';
 
-interface FormationRequirement {
-  name: string;
-  positions: string[];
-  count: number;
-}
-
-type RatingTier = 'high' | 'mid' | 'base';
-
-const FORMATION_REQUIREMENTS: FormationRequirement[] = [
-  { name: 'Goalkeepers', positions: ['GK'], count: 1 },
-  { name: 'Defenders', positions: ['LB', 'CB', 'RB'], count: 4 },
-  { name: 'Midfielders', positions: ['CM', 'CAM', 'RM', 'LM', 'CDM'], count: 3 },
-  { name: 'Attackers', positions: ['ST', 'LW', 'RW'], count: 3 },
+const SLOT_POSITION_MAP: ReadonlyArray<readonly string[]> = [
+  ['GK'],
+  ['RB', 'RWB'],
+  ['CB'],
+  ['CB'],
+  ['LB', 'LWB'],
+  ['CM', 'CAM', 'CDM', 'LM', 'RM'],
+  ['CM', 'CAM', 'CDM', 'LM', 'RM'],
+  ['CM', 'CAM', 'CDM', 'LM', 'RM'],
+  ['RW', 'RM'],
+  ['ST', 'CF'],
+  ['LW', 'LM'],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
+  [],
 ];
 
-const TIER_THRESHOLDS: Record<RatingTier, number> = {
+const CHOICE_COUNT = 5;
+const STARTING_COUNT = 11;
+const BENCH_COUNT = 7;
+
+type PlayerTier = 'elite' | 'high' | 'standard';
+
+const TIER_THRESHOLDS: Record<PlayerTier, number> = {
+  elite: 88,
   high: 85,
-  mid: 75,
-  base: 0,
+  standard: 0,
 };
 
-const getRatingTier = (player: Player): RatingTier => {
+const TIER_PROBABILITIES: ReadonlyArray<[PlayerTier, number]> = [
+  ['elite', 0.1],
+  ['high', 0.4],
+  ['standard', 0.5],
+];
+
+const getPlayerTier = (player: Player): PlayerTier => {
+  if (player.rating >= TIER_THRESHOLDS.elite) {
+    return 'elite';
+  }
   if (player.rating >= TIER_THRESHOLDS.high) {
     return 'high';
   }
-  if (player.rating >= TIER_THRESHOLDS.mid) {
-    return 'mid';
-  }
-  return 'base';
+  return 'standard';
 };
 
-const bucketPlayers = (players: Player[]): Record<RatingTier, Player[]> => {
-  const buckets: Record<RatingTier, Player[]> = {
-    high: [],
-    mid: [],
-    base: [],
-  };
-
-  players.forEach((player) => {
-    buckets[getRatingTier(player)].push(player);
-  });
-
-  return buckets;
+const bucketPlayers = (players: Player[]): Record<PlayerTier, Player[]> => {
+  return players.reduce(
+    (buckets, player) => {
+      const tier = getPlayerTier(player);
+      buckets[tier].push(player);
+      return buckets;
+    },
+    { elite: [] as Player[], high: [] as Player[], standard: [] as Player[] },
+  );
 };
 
 const getRandomElement = <T,>(items: readonly T[]): T | null => {
   if (items.length === 0) {
     return null;
   }
-  return items[Math.floor(Math.random() * items.length)];
+
+  const index = Math.floor(Math.random() * items.length);
+  return items[index];
 };
 
-const removePlayerById = (players: readonly Player[], id: number): Player[] =>
-  players.filter((player) => player.id !== id);
+const sampleTier = (): PlayerTier => {
+  const threshold = Math.random();
+  let running = 0;
 
-const createDistributedSample = (players: Player[], count: number): Player[] => {
+  for (const [tier, weight] of TIER_PROBABILITIES) {
+    running += weight;
+    if (threshold <= running) {
+      return tier;
+    }
+  }
+
+  return TIER_PROBABILITIES[TIER_PROBABILITIES.length - 1][0];
+};
+
+const sampleUniquePlayers = (players: Player[], count: number): Player[] => {
   const buckets = bucketPlayers(players);
-  const selected: Player[] = [];
+  const unique: Player[] = [];
+  const usedIds = new Set<number>();
 
-  const tierWeights: Record<RatingTier, number> = {
-    high: 0.4,
-    mid: 0.4,
-    base: 0.2,
-  };
+  while (unique.length < count && usedIds.size < players.length) {
+    const tier = sampleTier();
+    const candidates = buckets[tier].filter((player) => !usedIds.has(player.id));
+    let pick = getRandomElement(candidates);
 
-  const getAvailableTier = (): RatingTier => {
-    const availableTiers = (Object.keys(buckets) as RatingTier[]).filter(
-      (tier) => buckets[tier].length > 0,
-    );
-
-    if (availableTiers.length === 0) {
-      return 'base';
+    if (!pick) {
+      const remaining = players.filter((player) => !usedIds.has(player.id));
+      pick = getRandomElement(remaining);
     }
 
-    const weighted = availableTiers.map((tier) => ({ tier, weight: tierWeights[tier] }));
-    const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
-    const threshold = Math.random() * totalWeight;
-    let running = 0;
-
-    for (const item of weighted) {
-      running += item.weight;
-      if (threshold <= running) {
-        return item.tier;
-      }
-    }
-
-    return weighted[weighted.length - 1].tier;
-  };
-
-  while (selected.length < count && selected.length < players.length) {
-    const tier = getAvailableTier();
-    const bucket = buckets[tier];
-    let picked = getRandomElement(bucket);
-
-    if (!picked) {
-      const fallbackTier = (Object.keys(buckets) as RatingTier[]).find(
-        (nextTier) => buckets[nextTier].length > 0,
-      );
-      picked = fallbackTier ? getRandomElement(buckets[fallbackTier]) : null;
-    }
-
-    if (!picked) {
+    if (!pick) {
       break;
     }
 
-    selected.push(picked);
-    buckets.high = removePlayerById(buckets.high, picked.id);
-    buckets.mid = removePlayerById(buckets.mid, picked.id);
-    buckets.base = removePlayerById(buckets.base, picked.id);
+    unique.push(pick);
+    usedIds.add(pick.id);
   }
 
-  const remaining = players.filter((player) => !selected.some((item) => item.id === player.id));
-  while (selected.length < count && remaining.length > 0) {
+  const remaining = players.filter((player) => !usedIds.has(player.id));
+  while (unique.length < count && remaining.length > 0) {
     const next = getRandomElement(remaining);
-    if (!next) break;
-    selected.push(next);
-    remaining.splice(remaining.findIndex((player) => player.id === next.id), 1);
+    if (!next) {
+      break;
+    }
+
+    unique.push(next);
+    usedIds.add(next.id);
+    const nextIndex = remaining.findIndex((player) => player.id === next.id);
+    remaining.splice(nextIndex, 1);
   }
 
-  return selected.slice(0, count);
+  return unique.slice(0, count);
 };
 
-const fetchPlayersByPositions = async (positions: string[], limit: number): Promise<Player[]> => {
-  const response = await supabase.from('players').select('*').in('position', positions);
-  const { data, error } = response;
+const fetchPlayersForSlot = async (
+  positions: readonly string[],
+  excludedIds: readonly number[],
+): Promise<Player[]> => {
+  let query = supabase.from('players').select('*');
+  if (positions.length > 0) {
+    query = query.in('position', positions);
+  } else {
+    query = query.order('rating', { ascending: false }).limit(1000);
+  }
 
+  if (excludedIds.length > 0) {
+    query = query.not('id', 'in', `(${excludedIds.join(',')})`);
+  }
+
+  const { data, error } = await query;
   if (error) {
     throw error;
   }
 
   const players = (data ?? []) as Player[];
   if (players.length === 0) {
-    throw new Error(`No players found for positions: ${positions.join(', ')}`);
+    throw new Error(
+      positions.length > 0
+        ? `No players found for positions: ${positions.join(', ')}`
+        : 'No players found for the bench pool.',
+    );
   }
 
-  return createDistributedSample(players, limit);
-};
-
-const sortByPositionGroup = (players: Player[]): Player[] => {
-  const order: Record<string, number> = {
-    GK: 0,
-    LB: 1,
-    CB: 1,
-    RB: 1,
-    CM: 2,
-    CAM: 2,
-    RM: 2,
-    LM: 2,
-    CDM: 2,
-    ST: 3,
-    LW: 3,
-    RW: 3,
-  };
-
-  return [...players].sort((left, right) => {
-    const groupDiff = (order[left.position] ?? 99) - (order[right.position] ?? 99);
-    if (groupDiff !== 0) {
-      return groupDiff;
-    }
-    return right.rating - left.rating;
-  });
+  return players;
 };
 
 interface UseDraftResult {
-  squad: Player[];
-  selectedIds: number[];
-  selectedSquad: Player[];
+  draftStatus: DraftStatus;
+  currentSlotIndex: number;
+  currentChoices: Player[];
+  startingXI: Player[];
+  bench: Player[];
   loading: boolean;
   error: string | null;
-  generateDraft: () => Promise<void>;
-  toggleSelection: (playerId: number) => void;
-  clearSelection: () => void;
+  startDraft: () => Promise<void>;
+  selectPlayer: (player: Player) => Promise<void>;
+  swapPlayers: (playerAId: number, playerBId: number) => void;
+  restartDraft: () => Promise<void>;
+  retryGenerateChoicesForSlot: () => Promise<void>;
 }
 
 export const useDraft = (): UseDraftResult => {
-  const [squad, setSquad] = useState<Player[]>([]);
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>('idle');
+  const [currentSlotIndex, setCurrentSlotIndex] = useState<number>(0);
+  const [currentChoices, setCurrentChoices] = useState<Player[]>([]);
+  const [startingXI, setStartingXI] = useState<Player[]>([]);
+  const [bench, setBench] = useState<Player[]>([]);
+  const [draftedPlayerIds, setDraftedPlayerIds] = useState<number[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const generateDraft = useCallback(async () => {
-    setLoading(true);
+  const clearState = useCallback(() => {
+    setDraftStatus('idle');
+    setCurrentSlotIndex(0);
+    setCurrentChoices([]);
+    setStartingXI([]);
+    setBench([]);
+    setDraftedPlayerIds([]);
     setError(null);
+  }, []);
 
-    try {
-      let finalSquad: Player[] = [];
-      let attempt = 0;
+  const generateChoicesForSlot = useCallback(
+    async (index: number, excludedIds: number[]) => {
+      const positions = SLOT_POSITION_MAP[index];
+      setLoading(true);
+      setError(null);
 
-      while (finalSquad.length < TARGET_SQUAD_SIZE && attempt < MAX_ATTEMPTS) {
-        attempt += 1;
+      try {
+        const players = await fetchPlayersForSlot(positions, excludedIds);
+        const filtered = players.filter((player) => !excludedIds.includes(player.id));
+        const sampled = sampleUniquePlayers(filtered, CHOICE_COUNT);
 
-        const positionPromises = FORMATION_REQUIREMENTS.map((req) =>
-          fetchPlayersByPositions(req.positions, req.count),
-        );
-
-        const results = await Promise.all(positionPromises);
-        finalSquad = sortByPositionGroup(results.flat());
-
-        if (finalSquad.length < TARGET_SQUAD_SIZE) {
-          finalSquad = [];
+        if (sampled.length < CHOICE_COUNT) {
+          throw new Error('Unable to generate enough draft choices for this slot.');
         }
+
+        setCurrentChoices(sampled);
+      } catch (fetchError: unknown) {
+        const message = fetchError instanceof Error ? fetchError.message : 'Draft generation failed.';
+        setError(message);
+        setCurrentChoices([]);
+        setDraftStatus('error');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  const startDraft = useCallback(async () => {
+    clearState();
+    setDraftStatus('drafting');
+    setCurrentSlotIndex(0);
+    setStartingXI([]);
+    setBench([]);
+    await generateChoicesForSlot(0, []);
+  }, [clearState, generateChoicesForSlot]);
+
+  const selectPlayer = useCallback(
+    async (player: Player) => {
+      if (loading || draftStatus !== 'drafting') {
+        return;
       }
 
-      if (finalSquad.length !== TARGET_SQUAD_SIZE) {
-        throw new Error(
-          `Unable to form a valid 4-3-3 squad (got ${finalSquad.length}/11 players). Try again.`,
-        );
+      const nextSlotIndex = currentSlotIndex + 1;
+      const newDraftedIds = [...draftedPlayerIds, player.id];
+
+      if (currentSlotIndex < STARTING_COUNT) {
+        setStartingXI((current: Player[]) => [...current, player]);
+      } else {
+        setBench((current: Player[]) => [...current, player]);
       }
 
-      setSquad(finalSquad);
-      setSelectedIds(() => []);
-    } catch (catchError: unknown) {
-      const message = catchError instanceof Error ? catchError.message : 'Drafting failed';
-      setError(message);
-      setSquad(() => []);
-      setSelectedIds(() => []);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      setDraftedPlayerIds(newDraftedIds);
 
-  const toggleSelection = useCallback((playerId: number) => {
-    setSelectedIds((current) => {
-      if (current.includes(playerId)) {
-        return current.filter((id) => id !== playerId);
+      if (nextSlotIndex >= STARTING_COUNT + BENCH_COUNT) {
+        setCurrentSlotIndex(nextSlotIndex);
+        setCurrentChoices([]);
+        setDraftStatus('finished');
+        return;
       }
 
-      if (current.length >= TARGET_SQUAD_SIZE) {
-        return current;
+      setCurrentSlotIndex(nextSlotIndex);
+      await generateChoicesForSlot(nextSlotIndex, newDraftedIds);
+    },
+    [currentSlotIndex, draftStatus, draftedPlayerIds, generateChoicesForSlot, loading],
+  );
+
+  const swapPlayers = useCallback(
+    (playerAId: number, playerBId: number) => {
+      const startIndexA = startingXI.findIndex((player: Player) => player.id === playerAId);
+      const startIndexB = startingXI.findIndex((player: Player) => player.id === playerBId);
+      const benchIndexA = bench.findIndex((player: Player) => player.id === playerAId);
+      const benchIndexB = bench.findIndex((player: Player) => player.id === playerBId);
+
+      const isAInStart = startIndexA !== -1;
+      const isBInStart = startIndexB !== -1;
+      const isAInBench = benchIndexA !== -1;
+      const isBInBench = benchIndexB !== -1;
+
+      if (isAInStart && isBInBench) {
+        const newStarting = [...startingXI];
+        const newBench = [...bench];
+        newStarting[startIndexA] = bench[benchIndexB];
+        newBench[benchIndexB] = startingXI[startIndexA];
+        setStartingXI(newStarting);
+        setBench(newBench);
+      } else if (isBInStart && isAInBench) {
+        const newStarting = [...startingXI];
+        const newBench = [...bench];
+        newStarting[startIndexB] = bench[benchIndexA];
+        newBench[benchIndexA] = startingXI[startIndexB];
+        setStartingXI(newStarting);
+        setBench(newBench);
       }
+    },
+    [bench, startingXI],
+  );
 
-      return [...current, playerId];
-    });
-  }, []);
+  const restartDraft = useCallback(async () => {
+    clearState();
+    await startDraft();
+  }, [clearState, startDraft]);
 
-  const clearSelection = useCallback(() => {
-    // Reset any error state and clear both the selection and the current squad.
-    // Use functional setters to ensure immutable updates and fresh state.
-    setError(null);
-    setSelectedIds(() => []);
-    setSquad(() => []);
-  }, []);
-
-  const selectedSquad = squad.filter((player) => selectedIds.includes(player.id));
+  const retryGenerateChoicesForSlot = useCallback(async () => {
+    setDraftStatus('drafting');
+    await generateChoicesForSlot(currentSlotIndex, draftedPlayerIds);
+  }, [currentSlotIndex, draftedPlayerIds, generateChoicesForSlot]);
 
   return {
-    squad,
-    selectedIds,
-    selectedSquad,
+    draftStatus,
+    currentSlotIndex,
+    currentChoices,
+    startingXI,
+    bench,
     loading,
     error,
-    generateDraft,
-    toggleSelection,
-    clearSelection,
+    startDraft,
+    selectPlayer,
+    swapPlayers,
+    restartDraft,
+    retryGenerateChoicesForSlot,
   };
 };
