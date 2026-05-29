@@ -6,16 +6,16 @@ export type DraftStatus = 'idle' | 'drafting' | 'finished';
 
 const SLOT_POSITION_MAP: ReadonlyArray<readonly string[]> = [
   ['GK'],
-  ['LB', 'RB', 'CB', 'LWB', 'RWB'],
-  ['LB', 'RB', 'CB', 'LWB', 'RWB'],
-  ['LB', 'RB', 'CB', 'LWB', 'RWB'],
-  ['LB', 'RB', 'CB', 'LWB', 'RWB'],
+  ['RB', 'RWB'],
+  ['CB'],
+  ['CB'],
+  ['LB', 'LWB'],
   ['CM', 'CAM', 'CDM', 'LM', 'RM'],
   ['CM', 'CAM', 'CDM', 'LM', 'RM'],
   ['CM', 'CAM', 'CDM', 'LM', 'RM'],
-  ['LW', 'RW', 'ST', 'CF'],
-  ['LW', 'RW', 'ST', 'CF'],
-  ['LW', 'RW', 'ST', 'CF'],
+  ['RW', 'RM'],
+  ['ST', 'CF'],
+  ['LW', 'LM'],
   [],
   [],
   [],
@@ -126,10 +126,17 @@ const sampleUniquePlayers = (players: Player[], count: number): Player[] => {
   return unique.slice(0, count);
 };
 
-const fetchPlayersForSlot = async (positions: readonly string[]): Promise<Player[]> => {
+const fetchPlayersForSlot = async (
+  positions: readonly string[],
+  excludedIds: readonly number[],
+): Promise<Player[]> => {
   let query = supabase.from('players').select('*');
   if (positions.length > 0) {
     query = query.in('position', positions);
+  }
+
+  if (excludedIds.length > 0) {
+    query = query.not('id', 'in', `(${excludedIds.join(',')})`);
   }
 
   const { data, error } = await query;
@@ -159,6 +166,7 @@ interface UseDraftResult {
   error: string | null;
   startDraft: () => Promise<void>;
   selectPlayer: (player: Player) => Promise<void>;
+  swapPlayers: (playerAId: number, playerBId: number) => void;
   restartDraft: () => Promise<void>;
 }
 
@@ -168,6 +176,7 @@ export const useDraft = (): UseDraftResult => {
   const [currentChoices, setCurrentChoices] = useState<Player[]>([]);
   const [startingXI, setStartingXI] = useState<Player[]>([]);
   const [bench, setBench] = useState<Player[]>([]);
+  const [draftedPlayerIds, setDraftedPlayerIds] = useState<number[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -177,6 +186,7 @@ export const useDraft = (): UseDraftResult => {
     setCurrentChoices([]);
     setStartingXI([]);
     setBench([]);
+    setDraftedPlayerIds([]);
     setError(null);
   }, []);
 
@@ -187,8 +197,9 @@ export const useDraft = (): UseDraftResult => {
       setError(null);
 
       try {
-        const players = await fetchPlayersForSlot(positions);
-        const sampled = sampleUniquePlayers(players, CHOICE_COUNT);
+        const players = await fetchPlayersForSlot(positions, draftedPlayerIds);
+        const filtered = players.filter((player) => !draftedPlayerIds.includes(player.id));
+        const sampled = sampleUniquePlayers(filtered, CHOICE_COUNT);
 
         if (sampled.length < CHOICE_COUNT) {
           throw new Error('Unable to generate enough draft choices for this slot.');
@@ -203,11 +214,12 @@ export const useDraft = (): UseDraftResult => {
         setCurrentSlotIndex(0);
         setStartingXI([]);
         setBench([]);
+        setDraftedPlayerIds([]);
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [draftedPlayerIds],
   );
 
   const startDraft = useCallback(async () => {
@@ -233,6 +245,8 @@ export const useDraft = (): UseDraftResult => {
         setBench((current) => [...current, player]);
       }
 
+      setDraftedPlayerIds((current) => [...current, player.id]);
+
       if (nextSlotIndex >= STARTING_COUNT + BENCH_COUNT) {
         setCurrentSlotIndex(nextSlotIndex);
         setCurrentChoices([]);
@@ -244,6 +258,37 @@ export const useDraft = (): UseDraftResult => {
       await generateChoicesForSlot(nextSlotIndex);
     },
     [currentSlotIndex, draftStatus, generateChoicesForSlot, loading],
+  );
+
+  const swapPlayers = useCallback(
+    (playerAId: number, playerBId: number) => {
+      const startIndexA = startingXI.findIndex((player) => player.id === playerAId);
+      const startIndexB = startingXI.findIndex((player) => player.id === playerBId);
+      const benchIndexA = bench.findIndex((player) => player.id === playerAId);
+      const benchIndexB = bench.findIndex((player) => player.id === playerBId);
+
+      const isAInStart = startIndexA !== -1;
+      const isBInStart = startIndexB !== -1;
+      const isAInBench = benchIndexA !== -1;
+      const isBInBench = benchIndexB !== -1;
+
+      if (isAInStart && isBInBench) {
+        const newStarting = [...startingXI];
+        const newBench = [...bench];
+        newStarting[startIndexA] = bench[benchIndexB];
+        newBench[benchIndexB] = startingXI[startIndexA];
+        setStartingXI(newStarting);
+        setBench(newBench);
+      } else if (isBInStart && isAInBench) {
+        const newStarting = [...startingXI];
+        const newBench = [...bench];
+        newStarting[startIndexB] = bench[benchIndexA];
+        newBench[benchIndexA] = startingXI[startIndexB];
+        setStartingXI(newStarting);
+        setBench(newBench);
+      }
+    },
+    [bench, startingXI],
   );
 
   const restartDraft = useCallback(async () => {
@@ -261,6 +306,7 @@ export const useDraft = (): UseDraftResult => {
     error,
     startDraft,
     selectPlayer,
+    swapPlayers,
     restartDraft,
   };
 };

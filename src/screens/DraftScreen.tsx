@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -38,11 +38,28 @@ const DraftScreen: React.FC = () => {
     error,
     startDraft,
     selectPlayer,
+    swapPlayers,
     restartDraft,
   } = useDraft();
 
+  const [selectedSwapId, setSelectedSwapId] = useState<number | null>(null);
   const isDrafting = draftStatus === 'drafting';
   const isFinished = draftStatus === 'finished';
+
+  const handleSwapPress = (playerId: number) => {
+    if (selectedSwapId === playerId) {
+      setSelectedSwapId(null);
+      return;
+    }
+
+    if (selectedSwapId === null) {
+      setSelectedSwapId(playerId);
+      return;
+    }
+
+    swapPlayers(selectedSwapId, playerId);
+    setSelectedSwapId(null);
+  };
 
   const pickCounter = useMemo(() => {
     if (currentSlotIndex < 11) {
@@ -161,19 +178,40 @@ const DraftScreen: React.FC = () => {
 
       {isFinished ? (
         <ScrollView style={styles.finalPane} contentContainerStyle={styles.finalContent}>
+          <View style={styles.swapBannerContainer}>
+            <Text style={styles.swapBannerText}>
+              {selectedSwapId === null
+                ? 'Tap any player to initiate a swap.'
+                : 'Select a target player to complete the swap.'}
+            </Text>
+          </View>
+
           <Text style={styles.sectionTitle}>Starting XI</Text>
           {startingXI.map((player) => (
-            <PlayerCard key={player.id.toString()} player={player} />
+            <PlayerCard
+              key={player.id.toString()}
+              player={player}
+              selected={selectedSwapId === player.id}
+              onPress={() => handleSwapPress(player.id)}
+            />
           ))}
 
           <Text style={[styles.sectionTitle, styles.sectionSpacing]}>Bench</Text>
-          <View style={styles.benchGrid}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.benchScroll}
+          >
             {bench.map((player) => (
-              <View key={player.id.toString()} style={styles.benchItem}>
-                <PlayerCard player={player} />
+              <View key={player.id.toString()} style={styles.choiceCardWrapper}>
+                <PlayerCard
+                  player={player}
+                  selected={selectedSwapId === player.id}
+                  onPress={() => handleSwapPress(player.id)}
+                />
               </View>
             ))}
-          </View>
+          </ScrollView>
 
           <View style={styles.footerButtons}>
             <Pressable style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={restartDraft}>
@@ -295,6 +333,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingRight: 8,
   },
+  benchScroll: {
+    paddingVertical: 8,
+    paddingRight: 12,
+  },
   choiceCardWrapper: {
     width: 280,
     marginRight: 14,
@@ -355,10 +397,34 @@ const styles = StyleSheet.create({
     width: '48%',
     marginBottom: 12,
   },
+  swapTarget: {
+    borderRadius: 18,
+    overflow: 'hidden',
+  },
+  swapTargetActive: {
+    borderWidth: 3,
+    borderColor: '#1f8cff',
+    borderRadius: 14,
+  },
+  swapBannerContainer: {
+    backgroundColor: '#111827',
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 16,
+  },
+  swapBannerText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  pressedCard: {
+    opacity: 0.88,
+  },
   footerButtons: {
     marginTop: 20,
     flexDirection: 'row',
-    gap: 12,
+    justifyContent: 'space-between',
   },
   statusContainer: {
     alignItems: 'center',
