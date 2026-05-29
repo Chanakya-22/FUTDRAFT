@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { useDraft } from '../hooks/useDraft';
+import { useSquad } from '../context/SquadContext';
 import { Player } from '../types';
 
 const getSlotLabel = (slotIndex: number): string => {
@@ -42,6 +43,8 @@ const DraftScreen: React.FC = () => {
     swapPlayers,
     restartDraft,
   } = useDraft();
+
+  const { commitSquad } = useSquad(); // Bring in global context to save the drafted squad
 
   const [selectedSwapId, setSelectedSwapId] = useState<number | null>(null);
   const [selectedSwapSource, setSelectedSwapSource] = useState<'starter' | 'bench' | null>(null);
@@ -227,11 +230,23 @@ const DraftScreen: React.FC = () => {
           </ScrollView>
 
           <View style={styles.footerButtons}>
-            <Pressable style={({ pressed }: { pressed: boolean }) => [styles.primaryButton, pressed && styles.buttonPressed]} onPress={restartDraft}>
-              <Text style={styles.buttonText}>Clear / Restart</Text>
+            {/* Clear/Restart Button */}
+            <Pressable 
+              style={({ pressed }: { pressed: boolean }) => [styles.secondaryButton, pressed && styles.buttonPressed]} 
+              onPress={restartDraft}
+            >
+              <Text style={styles.secondaryButtonText}>Clear / Restart</Text>
             </Pressable>
-            <Pressable style={[styles.secondaryButton, styles.disabledButton]} disabled>
-              <Text style={[styles.secondaryButtonText, styles.disabledButtonText]}>Simulate Match</Text>
+
+            {/* Simulate Match Button */}
+            <Pressable 
+              style={({ pressed }: { pressed: boolean }) => [styles.primaryButton, pressed && styles.buttonPressed]} 
+              onPress={() => {
+                commitSquad(startingXI, bench);
+                alert("Squad locked! Tap the 'Match' tab at the bottom to begin.");
+              }}
+            >
+              <Text style={styles.buttonText}>Simulate Match</Text>
             </Pressable>
           </View>
         </ScrollView>
