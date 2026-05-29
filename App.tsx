@@ -5,13 +5,15 @@ import MatchScreen from './src/screens/MatchScreen';
 import PackScreen from './src/screens/PackScreen';
 import { SquadProvider } from './src/context/SquadContext';
 
+const DraftScreenWithNav = DraftScreen as React.ComponentType<{ navigateToMatch: () => void }>;
+
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs'>('draft');
 
   return (
     <SquadProvider>
       <SafeAreaView style={styles.container}>
-        {currentTab === 'draft' && <DraftScreen navigateToMatch={() => setCurrentTab('match')} />}
+        {currentTab === 'draft' && <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />}
         {currentTab === 'match' && <MatchScreen />}
         {currentTab === 'packs' && <PackScreen />}
 

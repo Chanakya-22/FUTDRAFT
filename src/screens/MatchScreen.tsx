@@ -65,7 +65,7 @@ const MatchScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.statusContainer}>
-          <Text style={styles.statusText}>Draft a squad first to start the match simulation.</Text>
+          <Text style={styles.statusText}>No squad found. Please complete the draft first.</Text>
         </View>
       </SafeAreaView>
     );

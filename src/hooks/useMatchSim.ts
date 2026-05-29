@@ -69,10 +69,12 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
         const nextClock = currentClock + 1;
         const encounter = evaluateEncounter(mentality, activePitch, cpuTeam);
 
-        setEvents((existing) => [
-          ...existing,
-          `${nextClock}' ${encounter.text}`,
-        ]);
+        if (encounter.type !== 'neutral') {
+          setEvents((existing) => [
+            ...existing,
+            `${nextClock}' ${encounter.text}`,
+          ]);
+        }
 
         if (encounter.type === 'goal') {
           setScore((previous) => ({

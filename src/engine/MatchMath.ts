@@ -3,9 +3,9 @@ import { Player } from '../types';
 export type Mentality = 'attack' | 'balanced' | 'defense';
 
 export interface MatchEvent {
-  type: 'goal' | 'save' | 'miss' | 'tackle';
+  type: 'goal' | 'save' | 'miss' | 'tackle' | 'neutral';
   text: string;
-  team: 'user' | 'cpu';
+  team: 'user' | 'cpu' | 'none';
 }
 
 const CPU_POSITIONS = ['GK', 'RB', 'CB', 'CB', 'LB', 'RM', 'CM', 'LM', 'RW', 'ST', 'LW'] as const;
@@ -58,86 +58,81 @@ const defenderPositions = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM'] as const
 const findPlayersByPositionGroup = (players: Player[], positions: readonly string[]) =>
   players.filter((player) => positions.includes(player.position));
 
+const rollPercent = () => Math.random() * 100;
+const neutralThreshold = () => 75 + Math.random() * 10;
+
 export const evaluateEncounter = (
   mentality: Mentality,
   playerSquad: Player[],
   cpuSquad: Player[],
 ): MatchEvent => {
   const modifiers = getMentalityModifiers(mentality);
-  const isUserAttack = Math.random() < 0.5 + modifiers.attackBias;
 
+  if (rollPercent() < neutralThreshold()) {
+    return {
+      type: 'neutral',
+      text: 'Possession contested in midfield...',
+      team: 'none',
+    };
+  }
+
+  const isUserAttack = Math.random() < 0.5 + modifiers.attackBias;
   const userAttackers = findPlayersByPositionGroup(playerSquad, attackerPositions as unknown as readonly string[]);
   const cpuAttackers = findPlayersByPositionGroup(cpuSquad, attackerPositions as unknown as readonly string[]);
   const userDefenders = findPlayersByPositionGroup(playerSquad, defenderPositions as unknown as readonly string[]);
   const cpuDefenders = findPlayersByPositionGroup(cpuSquad, defenderPositions as unknown as readonly string[]);
 
-  if (isUserAttack) {
-    const attacker = pickRandom(userAttackers) ?? pickRandom(playerSquad)!;
-    const defender = pickRandom(cpuDefenders) ?? pickRandom(cpuSquad)!;
-    const attackPower = getRatingValue(attacker, 'attack');
-    const defensePower = getRatingValue(defender, 'defend') * modifiers.defenseMultiplier;
-    const dice = Math.random() * 20 - 10;
-    const result = attackPower + dice - defensePower;
-
-    if (result >= 8) {
-      return {
-        type: 'goal',
-        text: `${attacker.name} powers through CPU defense and finds the net.`,
-        team: 'user',
-      };
-    }
-    if (result >= 0) {
-      return {
-        type: 'save',
-        text: `${attacker.name}'s strike is denied by a big CPU block.`,
-        team: 'cpu',
-      };
-    }
-    if (result >= -8) {
-      return {
-        type: 'miss',
-        text: `${attacker.name} drags the opportunity wide under pressure.`,
-        team: 'user',
-      };
-    }
-    return {
-      type: 'tackle',
-      text: `${defender.name} snuffs out the attempt with a crunching challenge.`,
-      team: 'cpu',
-    };
-  }
-
-  const attacker = pickRandom(cpuAttackers) ?? pickRandom(cpuSquad)!;
-  const defender = pickRandom(userDefenders) ?? pickRandom(playerSquad)!;
+  const attacker = pickRandom(isUserAttack ? userAttackers : cpuAttackers) ?? pickRandom(isUserAttack ? playerSquad : cpuSquad)!;
+  const defender = pickRandom(isUserAttack ? cpuDefenders : userDefenders) ?? pickRandom(isUserAttack ? cpuSquad : playerSquad)!;
   const attackPower = getRatingValue(attacker, 'attack');
   const defensePower = getRatingValue(defender, 'defend') * modifiers.defenseMultiplier;
   const dice = Math.random() * 20 - 10;
   const result = attackPower + dice - defensePower;
+  const keeperSaved = Math.random() < 0.3;
 
   if (result >= 8) {
+    if (keeperSaved) {
+      return {
+        type: 'save',
+        text: `${attacker.name} beats the defense but the keeper makes an incredible stop.`,
+        team: isUserAttack ? 'cpu' : 'user',
+      };
+    }
+
     return {
       type: 'goal',
-      text: `${attacker.name} breaks the line and scores for CPU.`,
-      team: 'cpu',
+      text: isUserAttack
+        ? `${attacker.name} powers through CPU defense and finds the net.`
+        : `${attacker.name} breaks the line and scores for CPU.`,
+      team: isUserAttack ? 'user' : 'cpu',
     };
   }
+
   if (result >= 0) {
     return {
       type: 'save',
-      text: `User defense stands tall to deny ${attacker.name}.`,
-      team: 'user',
+      text: isUserAttack
+        ? `${attacker.name}'s strike is denied by a big CPU block.`
+        : `User defense stands tall to deny ${attacker.name}.`,
+      team: isUserAttack ? 'cpu' : 'user',
     };
   }
+
   if (result >= -8) {
     return {
       type: 'miss',
-      text: `${attacker.name} skies the chance from distance.`,
-      team: 'cpu',
+      text: isUserAttack
+        ? `${attacker.name} drags the opportunity wide under pressure.`
+        : `${attacker.name} skies the chance from distance.`,
+      team: isUserAttack ? 'user' : 'cpu',
     };
   }
+
   return {
     type: 'tackle',
-    text: `${defender.name} cuts out the effort and triggers a break.`,
-    team: 'user',
+    text: isUserAttack
+      ? `${defender.name} snuffs out the attempt with a crunching challenge.`
+      : `${defender.name} cuts out the effort and triggers a break.`,
+    team: isUserAttack ? 'cpu' : 'user',
   };
 };
