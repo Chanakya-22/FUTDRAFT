@@ -10,8 +10,13 @@ import {
 } from 'react-native';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { useDraft } from '../hooks/useDraft';
+import { useSquad } from '../context/SquadContext';
 
-const DraftScreen: React.FC = () => {
+type DraftScreenProps = {
+  navigateToMatch: () => void;
+};
+
+const DraftScreen: React.FC<DraftScreenProps> = ({ navigateToMatch }) => {
   const {
     squad,
     selectedIds,
@@ -23,8 +28,15 @@ const DraftScreen: React.FC = () => {
     clearSelection,
   } = useDraft();
 
+  const { commitSquad } = useSquad();
   const hasSelection = selectedIds.length > 0;
   const hasSquad = squad.length > 0;
+  const canSimulate = !loading && hasSquad;
+
+  const handleSimulateMatch = () => {
+    commitSquad(squad, []);
+    navigateToMatch();
+  };
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -56,6 +68,18 @@ const DraftScreen: React.FC = () => {
           disabled={!hasSquad}
         >
           <Text style={styles.secondaryButtonText}>Clear</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            pressed && styles.buttonPressed,
+            !canSimulate && styles.buttonDisabled,
+          ]}
+          onPress={handleSimulateMatch}
+          disabled={!canSimulate}
+        >
+          <Text style={styles.secondaryButtonText}>Simulate Match</Text>
         </Pressable>
       </View>
 

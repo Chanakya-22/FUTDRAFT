@@ -1,31 +1,44 @@
 import React, { useState } from 'react';
 import { SafeAreaView, StyleSheet, View, Pressable, Text } from 'react-native';
 import DraftScreen from './src/screens/DraftScreen';
+import MatchScreen from './src/screens/MatchScreen';
 import PackScreen from './src/screens/PackScreen';
+import { SquadProvider } from './src/context/SquadContext';
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'draft' | 'packs'>('draft');
+  const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs'>('draft');
 
   return (
-    <SafeAreaView style={styles.container}>
-      {currentTab === 'draft' ? <DraftScreen /> : <PackScreen />}
+    <SquadProvider>
+      <SafeAreaView style={styles.container}>
+        {currentTab === 'draft' && <DraftScreen navigateToMatch={() => setCurrentTab('match')} />}
+        {currentTab === 'match' && <MatchScreen />}
+        {currentTab === 'packs' && <PackScreen />}
 
-      <View style={styles.tabBar}>
-        <Pressable
-          style={({ pressed }) => [styles.tabButton, currentTab === 'draft' && styles.tabActive, pressed && styles.tabPressed]}
-          onPress={() => setCurrentTab('draft')}
-        >
-          <Text style={[styles.tabText, currentTab === 'draft' && styles.tabTextActive]}>Draft</Text>
-        </Pressable>
+        <View style={styles.tabBar}>
+          <Pressable
+            style={({ pressed }) => [styles.tabButton, currentTab === 'draft' && styles.tabActive, pressed && styles.tabPressed]}
+            onPress={() => setCurrentTab('draft')}
+          >
+            <Text style={[styles.tabText, currentTab === 'draft' && styles.tabTextActive]}>Draft</Text>
+          </Pressable>
 
-        <Pressable
-          style={({ pressed }) => [styles.tabButton, currentTab === 'packs' && styles.tabActive, pressed && styles.tabPressed]}
-          onPress={() => setCurrentTab('packs')}
-        >
-          <Text style={[styles.tabText, currentTab === 'packs' && styles.tabTextActive]}>Packs</Text>
-        </Pressable>
-      </View>
-    </SafeAreaView>
+          <Pressable
+            style={({ pressed }) => [styles.tabButton, currentTab === 'match' && styles.tabActive, pressed && styles.tabPressed]}
+            onPress={() => setCurrentTab('match')}
+          >
+            <Text style={[styles.tabText, currentTab === 'match' && styles.tabTextActive]}>Match</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.tabButton, currentTab === 'packs' && styles.tabActive, pressed && styles.tabPressed]}
+            onPress={() => setCurrentTab('packs')}
+          >
+            <Text style={[styles.tabText, currentTab === 'packs' && styles.tabTextActive]}>Packs</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </SquadProvider>
   );
 }
 
