@@ -12,7 +12,6 @@ import {
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { useMatchSim } from '../hooks/useMatchSim';
 import { useSquad } from '../context/SquadContext';
-import { Player } from '../types';
 
 const mentalityOptions: Array<{ label: string; value: 'attack' | 'balanced' | 'defense' }> = [
   { label: 'Attack', value: 'attack' },
@@ -27,17 +26,23 @@ const MatchScreen: React.FC = () => {
     score,
     events,
     mentality,
-    subsRemaining,
     isPaused,
+    isHalfTime,
+    matchPhase,
+    subsRemaining,
     activePitch,
     activeBench,
-    cpuTeam,
+    penaltyPhase,
+    penaltyRound,
+    penaltyShootout,
     subModalOpen,
     setMentality,
     togglePause,
     openSubModal,
     closeSubModal,
     performSub,
+    resumeSecondHalf,
+    shootPenalty,
   } = useMatchSim(startingXI, bench);
 
   const [selectedPitchId, setSelectedPitchId] = useState<number | null>(null);
@@ -50,7 +55,12 @@ const MatchScreen: React.FC = () => {
     }
   }, [events]);
 
-  const formattedClock = useMemo(() => `${clock}'`, [clock]);
+  const formattedClock = useMemo(() => {
+    if (isHalfTime) return 'HT';
+    if (matchPhase === 'fulltime') return 'FT';
+    if (matchPhase === 'penalties') return 'P';
+    return `${clock}'`;
+  }, [clock, isHalfTime, matchPhase]);
 
   const handleConfirmSub = () => {
     if (selectedPitchId !== null && selectedBenchId !== null) {
@@ -71,6 +81,60 @@ const MatchScreen: React.FC = () => {
     );
   }
 
+  if (matchPhase === 'penalties' && penaltyPhase === 'shooting') {
+    return (
+      <SafeAreaView style={styles.screen}>
+        <View style={styles.penaltyHeader}>
+          <Text style={styles.penaltyTitle}>PENALTY SHOOTOUT</Text>
+          <Text style={styles.penaltyScore}>
+            {penaltyShootout.user} - {penaltyShootout.cpu}
+          </Text>
+          <Text style={styles.penaltyRound}>Round {penaltyRound}</Text>
+        </View>
+
+        <View style={styles.penaltyInstructions}>
+          <Text style={styles.instructionText}>Choose your direction</Text>
+        </View>
+
+        <View style={styles.penaltyButtonRow}>
+          <Pressable
+            style={({ pressed }) => [styles.penaltyButton, pressed && styles.buttonPressed]}
+            onPress={() => shootPenalty('LEFT')}
+          >
+            <Text style={styles.penaltyButtonText}>LEFT</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.penaltyButton, pressed && styles.buttonPressed]}
+            onPress={() => shootPenalty('MIDDLE')}
+          >
+            <Text style={styles.penaltyButtonText}>MIDDLE</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.penaltyButton, pressed && styles.buttonPressed]}
+            onPress={() => shootPenalty('RIGHT')}
+          >
+            <Text style={styles.penaltyButtonText}>RIGHT</Text>
+          </Pressable>
+        </View>
+
+        <View style={styles.penaltyEvents}>
+          <Text style={styles.penaltyEventsTitle}>Shootout Log</Text>
+          <ScrollView style={styles.penaltyEventsList} ref={scrollRef} contentContainerStyle={{ paddingBottom: 12 }}>
+            {events
+              .filter((e) => e.includes('Round') || e.includes('Shootout'))
+              .map((eventText, index) => (
+                <Text key={`${eventText}-${index}`} style={styles.penaltyEventText}>
+                  {eventText}
+                </Text>
+              ))}
+          </ScrollView>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.scoreBox}>
@@ -80,7 +144,6 @@ const MatchScreen: React.FC = () => {
         </View>
         <View style={styles.clockContainer}>
           <Text style={styles.clockText}>{formattedClock}</Text>
-          <Text style={styles.clockLabel}>Match Time</Text>
         </View>
         <View style={styles.scoreColumn}>
           <Text style={styles.scoreLabel}>CPU</Text>
@@ -89,7 +152,7 @@ const MatchScreen: React.FC = () => {
       </View>
 
       <View style={styles.tickerSection}>
-        <Text style={styles.sectionTitle}>Play-by-play</Text>
+        <Text style={styles.sectionTitle}>Match Events</Text>
         <ScrollView ref={scrollRef} style={styles.tickerBox} contentContainerStyle={styles.tickerContent}>
           {events.map((eventText, index) => (
             <Text key={`${eventText}-${index}`} style={styles.eventText}>
@@ -99,8 +162,7 @@ const MatchScreen: React.FC = () => {
         </ScrollView>
       </View>
 
-      <View style={styles.tacticsBox}>
-        <Text style={styles.sectionTitle}>Tactics</Text>
+      <View style={styles.controlsBox}>
         <View style={styles.mentalityRow}>
           {mentalityOptions.map((option) => (
             <Pressable
@@ -117,17 +179,45 @@ const MatchScreen: React.FC = () => {
           ))}
         </View>
 
-        <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.buttonPressed,
-          ]}
-          onPress={openSubModal}
-          disabled={subsRemaining <= 0}
-        >
-          <Text style={styles.buttonText}>Pause & Make Sub ({subsRemaining} left)</Text>
-        </Pressable>
+        <View style={styles.actionRow}>
+          <Pressable
+            style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+            onPress={togglePause}
+            disabled={matchPhase !== 'live'}
+          >
+            <Text style={styles.actionButtonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [
+              styles.actionButton,
+              subsRemaining <= 0 && styles.buttonDisabled,
+              pressed && styles.buttonPressed,
+            ]}
+            onPress={openSubModal}
+            disabled={subsRemaining <= 0 || matchPhase !== 'live'}
+          >
+            <Text style={styles.actionButtonText}>Sub ({subsRemaining})</Text>
+          </Pressable>
+        </View>
       </View>
+
+      <Modal visible={isHalfTime} transparent animationType="fade">
+        <View style={styles.halftimeOverlay}>
+          <View style={styles.halftimeContent}>
+            <Text style={styles.halftimeTitle}>HALFTIME</Text>
+            <Text style={styles.halftimeScore}>
+              {score.user} - {score.cpu}
+            </Text>
+            <Pressable
+              style={({ pressed }) => [styles.resumeButton, pressed && styles.buttonPressed]}
+              onPress={resumeSecondHalf}
+            >
+              <Text style={styles.resumeButtonText}>Resume Match</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={subModalOpen} transparent animationType="slide">
         <View style={styles.modalBackground}>
@@ -171,21 +261,21 @@ const MatchScreen: React.FC = () => {
 
             <View style={styles.modalButtonRow}>
               <Pressable
-                style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+                style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
                 onPress={closeSubModal}
               >
-                <Text style={styles.secondaryButtonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
               <Pressable
                 style={({ pressed }) => [
-                  styles.primaryButton,
+                  styles.confirmButton,
                   pressed && styles.buttonPressed,
                   !(selectedPitchId !== null && selectedBenchId !== null) && styles.buttonDisabled,
                 ]}
                 onPress={handleConfirmSub}
                 disabled={!(selectedPitchId !== null && selectedBenchId !== null)}
               >
-                <Text style={styles.buttonText}>Confirm</Text>
+                <Text style={styles.confirmButtonText}>Confirm</Text>
               </Pressable>
             </View>
           </View>
@@ -202,159 +292,293 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#070707',
     paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 16,
+    paddingVertical: 16,
   },
   scoreBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     backgroundColor: '#111111',
-    borderRadius: 20,
-    padding: 18,
-    marginBottom: 16,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
   },
   scoreColumn: {
     alignItems: 'center',
   },
   scoreLabel: {
     color: '#8a8a8a',
-    fontSize: 12,
+    fontSize: 11,
     textTransform: 'uppercase',
-    marginBottom: 8,
+    fontWeight: '700',
+    marginBottom: 6,
   },
   scoreValue: {
-    color: '#fff',
-    fontSize: 34,
+    color: '#ffffff',
+    fontSize: 32,
     fontWeight: '900',
   },
   clockContainer: {
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#161616',
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
   },
   clockText: {
-    color: '#fff',
-    fontSize: 20,
+    color: '#ffffff',
+    fontSize: 18,
     fontWeight: '800',
-  },
-  clockLabel: {
-    color: '#8a8a8a',
-    fontSize: 12,
-    marginTop: 4,
   },
   tickerSection: {
     flex: 1,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionTitle: {
-    color: '#fff',
-    fontSize: 15,
+    color: '#ffffff',
+    fontSize: 14,
     fontWeight: '800',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   tickerBox: {
-    backgroundColor: '#101010',
-    borderRadius: 18,
-    padding: 14,
+    backgroundColor: '#0f0f0f',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#1a1a1a',
   },
   tickerContent: {
-    paddingBottom: 18,
+    paddingBottom: 12,
   },
   eventText: {
-    color: '#d9d9d9',
-    fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 10,
+    color: '#d0d0d0',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+    fontFamily: 'monospace',
   },
-  tacticsBox: {
+  controlsBox: {
     backgroundColor: '#111111',
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
   },
   mentalityRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 14,
+    gap: 8,
+    marginBottom: 12,
   },
   mentalityButton: {
     flex: 1,
-    backgroundColor: '#181818',
-    borderRadius: 14,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    paddingVertical: 10,
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    marginHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
   },
   mentalityActive: {
     backgroundColor: '#1f8cff',
+    borderColor: '#1f8cff',
   },
   mentalityText: {
-    color: '#fff',
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '700',
   },
-  primaryButton: {
-    backgroundColor: '#1f8cff',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  secondaryButton: {
-    backgroundColor: '#1d1d1d',
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
+  actionButton: {
     flex: 1,
-    marginRight: 12,
+    backgroundColor: '#1f8cff',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1f8cff',
   },
-  buttonText: {
-    color: '#fff',
+  actionButtonText: {
+    color: '#ffffff',
     fontWeight: '700',
-  },
-  secondaryButtonText: {
-    color: '#fff',
-    fontWeight: '700',
+    fontSize: 12,
   },
   buttonPressed: {
-    opacity: 0.88,
+    opacity: 0.85,
   },
   buttonDisabled: {
     opacity: 0.45,
+    backgroundColor: '#444444',
+  },
+  halftimeOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  halftimeContent: {
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  halftimeTitle: {
+    color: '#ffffff',
+    fontSize: 56,
+    fontWeight: '900',
+    marginBottom: 20,
+    letterSpacing: 4,
+  },
+  halftimeScore: {
+    color: '#ffffff',
+    fontSize: 48,
+    fontWeight: '800',
+    marginBottom: 32,
+  },
+  resumeButton: {
+    backgroundColor: '#1f8cff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 48,
+    borderWidth: 2,
+    borderColor: '#1f8cff',
+  },
+  resumeButtonText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 16,
+  },
+  penaltyHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 2,
+    borderBottomColor: '#1a1a1a',
+  },
+  penaltyTitle: {
+    color: '#ffffff',
+    fontSize: 32,
+    fontWeight: '900',
+    marginBottom: 12,
+  },
+  penaltyScore: {
+    color: '#1f8cff',
+    fontSize: 40,
+    fontWeight: '900',
+    marginBottom: 8,
+  },
+  penaltyRound: {
+    color: '#8a8a8a',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  penaltyInstructions: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  instructionText: {
+    color: '#d0d0d0',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  penaltyButtonRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+    marginBottom: 20,
+  },
+  penaltyButton: {
+    backgroundColor: '#1f8cff',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 28,
+    borderWidth: 2,
+    borderColor: '#1f8cff',
+  },
+  penaltyButtonText: {
+    color: '#ffffff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  penaltyEvents: {
+    flex: 1,
+    backgroundColor: '#0f0f0f',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1a1a1a',
+  },
+  penaltyEventsTitle: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 8,
+  },
+  penaltyEventsList: {
+    flex: 1,
+  },
+  penaltyEventText: {
+    color: '#d0d0d0',
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 8,
+    fontFamily: 'monospace',
+  },
+  statusContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  statusText: {
+    color: '#ffffff',
+    fontSize: 16,
+    textAlign: 'center',
   },
   modalBackground: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
     justifyContent: 'center',
-    padding: 20,
+    padding: 16,
   },
   modalContent: {
     backgroundColor: '#0f0f0f',
-    borderRadius: 24,
-    padding: 18,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
   },
   modalTitle: {
-    color: '#fff',
-    fontSize: 20,
+    color: '#ffffff',
+    fontSize: 18,
     fontWeight: '900',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   modalSubtitle: {
     color: '#b3b3b3',
+    fontSize: 12,
     marginBottom: 16,
   },
   subSectionTitle: {
-    color: '#fff',
-    fontSize: 14,
+    color: '#ffffff',
+    fontSize: 12,
     fontWeight: '800',
-    marginVertical: 12,
+    marginVertical: 10,
   },
   cardRow: {
     marginBottom: 12,
   },
   swapCard: {
-    marginRight: 12,
-    borderRadius: 16,
+    marginRight: 10,
+    borderRadius: 12,
     borderWidth: 3,
     borderColor: 'transparent',
     overflow: 'hidden',
@@ -364,17 +588,35 @@ const styles = StyleSheet.create({
   },
   modalButtonRow: {
     flexDirection: 'row',
+    gap: 10,
     marginTop: 16,
   },
-  statusContainer: {
+  cancelButton: {
     flex: 1,
-    justifyContent: 'center',
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    paddingVertical: 12,
     alignItems: 'center',
-    paddingHorizontal: 20,
+    borderWidth: 1,
+    borderColor: '#2a2a2a',
   },
-  statusText: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
+  cancelButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: '#1f8cff',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1f8cff',
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 12,
   },
 });
