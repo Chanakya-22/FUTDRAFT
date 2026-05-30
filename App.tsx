@@ -1,14 +1,35 @@
 import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, View, Pressable, Text } from 'react-native';
+import { SafeAreaView, StyleSheet, View, Pressable, Text, ActivityIndicator } from 'react-native';
 import DraftScreen from './src/screens/DraftScreen';
 import MatchScreen from './src/screens/MatchScreen';
 import PackScreen from './src/screens/PackScreen';
 import { SquadProvider } from './src/context/SquadContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
 
 const DraftScreenWithNav = DraftScreen as React.ComponentType<{ navigateToMatch: () => void }>;
 
-export default function App() {
+function MainApp() {
+  const { session, loading } = useAuth();
   const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs'>('draft');
+  const [isLoginView, setIsLoginView] = useState(true);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#1f8cff" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!session) {
+    return isLoginView ? (
+      <LoginScreen onNavigateToSignup={() => setIsLoginView(false)} />
+    ) : (
+      <SignupScreen onNavigateToLogin={() => setIsLoginView(true)} />
+    );
+  }
 
   return (
     <SquadProvider>
@@ -44,6 +65,14 @@ export default function App() {
   );
 }
 
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -76,5 +105,8 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#fff',
   },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 });
-

@@ -1,5 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useContext, useState } from 'react';
 import { supabase } from '../api/supabaseClient';
+import { AuthContext } from '../context/AuthContext';
 import { Player } from '../types';
 
 type Tier = 'high' | 'mid' | 'base';
@@ -75,6 +76,9 @@ const selectRandomPlayerForTier = async (tier: Tier): Promise<Player> => {
 };
 
 export const usePack = (): UsePackResult => {
+  const authContext = useContext(AuthContext);
+  const user = authContext?.session?.user;
+
   const [pulledPlayers, setPulledPlayers] = useState<Player[]>([]);
   const [isOpening, setIsOpening] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,13 +98,73 @@ export const usePack = (): UsePackResult => {
       );
 
       setPulledPlayers(players);
+
+      // Background execution for saving players to the user's club
+      if (user) {
+        const savePackToMyClub = async () => {
+          try {
+            // 1. Fetch the user's current club
+            const { data: existingClub, error: fetchClubError } = await supabase
+              .from('my_players')
+              .select('id, quantity, player_data')
+              .eq('user_id', user.id);
+
+            if (fetchClubError) {
+              throw fetchClubError;
+            }
+
+            // 2. Group the packedPlayers locally
+            const aggregated: Record<number, { player: Player; quantity: number }> = {};
+            for (const player of players) {
+              if (!aggregated[player.id]) {
+                aggregated[player.id] = { player, quantity: 0 };
+              }
+              aggregated[player.id].quantity += 1;
+            }
+
+            // 3. Loop through the grouped new players
+            for (const key in aggregated) {
+              const { player: newPlayer, quantity: newQuantity } = aggregated[key];
+
+              // 4. Check if they exist in existingClub
+              const existingRow = existingClub?.find((row: any) => row.player_data.id === newPlayer.id);
+
+              if (existingRow) {
+                // 5. If found: Execute an update
+                const { error: updateError } = await supabase
+                  .from('my_players')
+                  .update({ quantity: existingRow.quantity + newQuantity })
+                  .eq('id', existingRow.id);
+
+                if (updateError) throw updateError;
+              } else {
+                // 6. If NOT found: Execute an insert
+                const { error: insertError } = await supabase
+                  .from('my_players')
+                  .insert({
+                    user_id: user.id,
+                    player_data: newPlayer,
+                    quantity: newQuantity,
+                  });
+
+                if (insertError) throw insertError;
+              }
+            }
+          } catch (saveError) {
+            // Step C: Fail silently in the background
+            console.error('Failed to save players to my_players:', saveError);
+          }
+        };
+
+        savePackToMyClub();
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to open pack');
       setPulledPlayers([]);
     } finally {
       setIsOpening(false);
     }
-  }, []);
+  }, [user]);
 
   const discard = useCallback(() => {
     setPulledPlayers([]);
