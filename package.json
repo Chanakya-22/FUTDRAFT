@@ -1,7 +1,8 @@
 {
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
-    "expo": "^56.0.5"
+    "expo": "^56.0.5",
+    "react": "^19.2.3"
   },
   "devDependencies": {
     "@types/react": "~19.2.14",
