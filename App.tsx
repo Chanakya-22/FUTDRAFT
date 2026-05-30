@@ -1,21 +1,56 @@
 import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, View, Pressable, Text } from 'react-native';
+import { SafeAreaView, StyleSheet, View, Pressable, Text, ActivityIndicator } from 'react-native';
 import DraftScreen from './src/screens/DraftScreen';
 import MatchScreen from './src/screens/MatchScreen';
 import PackScreen from './src/screens/PackScreen';
 import { SquadProvider } from './src/context/SquadContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
+import MyPlayersScreen from './src/screens/MyPlayersScreen';
+import MySquadScreen from './src/screens/MySquadScreen';
 
 const DraftScreenWithNav = DraftScreen as React.ComponentType<{ navigateToMatch: () => void }>;
 
-export default function App() {
-  const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs'>('draft');
+function MainApp() {
+  const { session, loading } = useAuth();
+  const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs' | 'myclub' | 'mysquad'>('draft');
+  const [isLoginView, setIsLoginView] = useState(true);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.container, styles.centerContent]}>
+        <ActivityIndicator size="large" color="#1f8cff" />
+      </SafeAreaView>
+    );
+  }
+
+  if (!session) {
+    return isLoginView ? (
+      <LoginScreen onNavigateToSignup={() => setIsLoginView(false)} />
+    ) : (
+      <SignupScreen onNavigateToLogin={() => setIsLoginView(true)} />
+    );
+  }
 
   return (
     <SquadProvider>
       <SafeAreaView style={styles.container}>
-        {currentTab === 'draft' && <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />}
-        {currentTab === 'match' && <MatchScreen />}
-        {currentTab === 'packs' && <PackScreen />}
+        <View style={[styles.tabContent, { display: currentTab === 'draft' ? 'flex' : 'none' }]}>
+          <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'match' ? 'flex' : 'none' }]}>
+          <MatchScreen isActive={currentTab === 'match'} />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'packs' ? 'flex' : 'none' }]}>
+          <PackScreen />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'myclub' ? 'flex' : 'none' }]}>
+          <MyPlayersScreen />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'mysquad' ? 'flex' : 'none' }]}>
+          <MySquadScreen />
+        </View>
 
         <View style={styles.tabBar}>
           <Pressable
@@ -38,9 +73,31 @@ export default function App() {
           >
             <Text style={[styles.tabText, currentTab === 'packs' && styles.tabTextActive]}>Packs</Text>
           </Pressable>
+          
+          <Pressable
+            style={({ pressed }) => [styles.tabButton, currentTab === 'myclub' && styles.tabActive, pressed && styles.tabPressed]}
+            onPress={() => setCurrentTab('myclub')}
+          >
+            <Text style={[styles.tabText, currentTab === 'myclub' && styles.tabTextActive]}>My Club</Text>
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.tabButton, currentTab === 'mysquad' && styles.tabActive, pressed && styles.tabPressed]}
+            onPress={() => setCurrentTab('mysquad')}
+          >
+            <Text style={[styles.tabText, currentTab === 'mysquad' && styles.tabTextActive]}>My Squad</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </SquadProvider>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }
 
@@ -76,5 +133,11 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#fff',
   },
+  centerContent: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabContent: {
+    flex: 1,
+  },
 });
-

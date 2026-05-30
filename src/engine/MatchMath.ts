@@ -17,11 +17,16 @@ const AMBIENT_EVENT_CHANCE = 0.05;
 const randomBetween = (min: number, max: number): number =>
   Math.floor(Math.random() * (max - min + 1)) + min;
 
-const calculatePlayerOVR = (player: Player): number =>
-  Math.round(
-    (player.pace + player.shooting + player.passing + player.dribbling + player.defending + player.physical) /
-      6,
-  );
+const calculatePlayerOVR = (player: Player): number => {
+  const p = player?.name ? player : (player as any)?.player_data;
+  const pace = p?.pace ?? 50;
+  const shooting = p?.shooting ?? 50;
+  const passing = p?.passing ?? 50;
+  const dribbling = p?.dribbling ?? 50;
+  const defending = p?.defending ?? 50;
+  const physical = p?.physical ?? 50;
+  return Math.round((pace + shooting + passing + dribbling + defending + physical) / 6);
+};
 
 export const generateCPUTeam = (): Player[] =>
   CPU_POSITIONS.map((position, index) => {
@@ -55,11 +60,17 @@ export const generateCPUTeam = (): Player[] =>
   });
 
 export const calculateTeamOVR = (squad: Player[]): number => {
-  if (squad.length === 0) {
+  if (!squad || squad.length === 0) {
     return 0;
   }
-  const total = squad.reduce((acc, player) => acc + player.rating, 0);
-  return Math.round(total / squad.length);
+  let validCount = 0;
+  const total = squad.reduce((acc, player) => {
+    if (!player) return acc;
+    validCount++;
+    const p = player?.name ? player : (player as any)?.player_data;
+    return acc + (p?.rating ?? calculatePlayerOVR(player));
+  }, 0);
+  return validCount === 0 ? 0 : Math.round(total / validCount);
 };
 
 const pickRandom = <T,>(items: T[]): T | null => {
@@ -73,7 +84,11 @@ const attackerPositions = ['ST', 'LW', 'RW', 'CF', 'CAM', 'CM', 'RM', 'LM'] as c
 const defenderPositions = ['GK', 'CB', 'LB', 'RB', 'LWB', 'RWB', 'CDM'] as const;
 
 const findPlayersByPositionGroup = (players: Player[], positions: readonly string[]) =>
-  players.filter((player) => positions.includes(player.position));
+  players.filter((player) => {
+    if (!player) return false;
+    const p = player?.name ? player : (player as any)?.player_data;
+    return positions.includes(p?.position);
+  });
 
 export const evaluateEncounter = (
   mentality: Mentality,
@@ -125,27 +140,40 @@ export const evaluateEncounter = (
     pickRandom(isUserAttack ? playerSquad : cpuSquad)!;
   const defender =
     pickRandom(isUserAttack ? cpuDefenders : userDefenders) ??
-    pickRandom(isUserAttack ? cpuSquad : playerSquad)!;
+    pickRandom(isUserAttack ? cpuSquad : playerSquad);
+
+  if (!attacker || !defender) {
+    return {
+      type: 'neutral',
+      team: 'none',
+      message: 'Possession changes hands.',
+    };
+  }
+
+  const safeAttacker = attacker?.name ? attacker : (attacker as any)?.player_data || {};
+  const safeDefender = defender?.name ? defender : (defender as any)?.player_data || {};
+  const attackerName = safeAttacker?.name || 'Attacker';
+  const defenderName = safeDefender?.name || 'Defender';
 
   const attackingTeamOVR = calculateTeamOVR(isUserAttack ? playerSquad : cpuSquad);
   const defendingTeamOVR = calculateTeamOVR(isUserAttack ? cpuSquad : playerSquad);
   const momentum = (attackingTeamOVR - defendingTeamOVR) * 0.5;
 
-  const effectiveAttackerPAC = attacker.pace + randomBetween(0, 10);
-  const effectiveDefenderPAC = defender.pace + 8 + randomBetween(0, 10);
+  const effectiveAttackerPAC = (safeAttacker?.pace ?? 50) + randomBetween(0, 10);
+  const effectiveDefenderPAC = (safeDefender?.pace ?? 50) + 8 + randomBetween(0, 10);
 
   if (effectiveDefenderPAC > effectiveAttackerPAC + 5) {
     return {
       type: 'save',
       team: isUserAttack ? 'cpu' : 'user',
       message: isUserAttack
-        ? `${defender.name} tracks back and wins the challenge cleanly.`
-        : `${defender.name} reads the run and snuffs out the attack.`,
+        ? `${defenderName} tracks back and wins the challenge cleanly.`
+        : `${defenderName} reads the run and snuffs out the attack.`,
     };
   }
 
-  let attackScore = attacker.shooting + attacker.physical * 0.3 + momentum + randomBetween(0, 15);
-  const defenseScore = defender.defending + defender.physical * 0.5 + randomBetween(0, 15);
+  let attackScore = (safeAttacker?.shooting ?? 50) + (safeAttacker?.physical ?? 50) * 0.3 + momentum + randomBetween(0, 15);
+  const defenseScore = (safeDefender?.defending ?? 50) + (safeDefender?.physical ?? 50) * 0.5 + randomBetween(0, 15);
 
   if (mentality === 'attack' && isUserAttack) {
     attackScore *= 1.1;
@@ -156,8 +184,8 @@ export const evaluateEncounter = (
       type: 'goal',
       team: isUserAttack ? 'user' : 'cpu',
       message: isUserAttack
-        ? `${attacker.name} breaks through and finishes clinically.`
-        : `${attacker.name} powers one beyond the keeper for CPU.`,
+        ? `${attackerName} breaks through and finishes clinically.`
+        : `${attackerName} powers one beyond the keeper for CPU.`,
     };
   }
 
@@ -167,8 +195,8 @@ export const evaluateEncounter = (
       type: 'save',
       team: isUserAttack ? 'cpu' : 'user',
       message: isUserAttack
-        ? `${defender.name} makes a strong save to deny the chance.`
-        : `${defender.name} blocks the shot with excellent positioning.`,
+        ? `${defenderName} makes a strong save to deny the chance.`
+        : `${defenderName} blocks the shot with excellent positioning.`,
     };
   }
 
@@ -176,7 +204,7 @@ export const evaluateEncounter = (
     type: 'miss',
     team: isUserAttack ? 'user' : 'cpu',
     message: isUserAttack
-      ? `${attacker.name} misses the target from a promising move.`
-      : `${attacker.name} cannot keep the effort on frame.`,
+      ? `${attackerName} misses the target from a promising move.`
+      : `${attackerName} cannot keep the effort on frame.`,
   };
 };
