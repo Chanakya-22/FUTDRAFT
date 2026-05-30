@@ -35,10 +35,18 @@ function MainApp() {
   return (
     <SquadProvider>
       <SafeAreaView style={styles.container}>
-        {currentTab === 'draft' && <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />}
-        {currentTab === 'match' && <MatchScreen />}
-        {currentTab === 'packs' && <PackScreen />}
-        {currentTab === 'myclub' && <MyPlayersScreen />}
+        <View style={[styles.tabContent, { display: currentTab === 'draft' ? 'flex' : 'none' }]}>
+          <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'match' ? 'flex' : 'none' }]}>
+          <MatchScreen isActive={currentTab === 'match'} />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'packs' ? 'flex' : 'none' }]}>
+          <PackScreen />
+        </View>
+        <View style={[styles.tabContent, { display: currentTab === 'myclub' ? 'flex' : 'none' }]}>
+          <MyPlayersScreen />
+        </View>
 
         <View style={styles.tabBar}>
           <Pressable
@@ -117,5 +125,8 @@ const styles = StyleSheet.create({
   centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  tabContent: {
+    flex: 1,
   },
 });

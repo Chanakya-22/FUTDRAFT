@@ -20,7 +20,11 @@ const mentalityOptions: Array<{ label: string; value: 'attack' | 'balanced' | 'd
   { label: 'Defense', value: 'defense' },
 ];
 
-const MatchScreen: React.FC = () => {
+interface MatchScreenProps {
+  isActive?: boolean;
+}
+
+const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
   const { startingXI, bench } = useSquad();
   const {
     clock,
@@ -48,6 +52,8 @@ const MatchScreen: React.FC = () => {
     performSub,
     resumeSecondHalf,
     shootPenalty,
+    pauseMatch,
+    resetMatch,
   } = useMatchSim(startingXI, bench);
   const [cpuModalOpen, setCpuModalOpen] = useState(false);
   const [myModalOpen, setMyModalOpen] = useState(false);
@@ -57,6 +63,12 @@ const MatchScreen: React.FC = () => {
 
   const userOVR = useMemo(() => calculateTeamOVR(startingXI), [startingXI]);
   const cpuOVR = useMemo(() => calculateTeamOVR(cpuTeam), [cpuTeam]);
+
+  useEffect(() => {
+    if (!isActive && !isPaused && matchPhase === 'live') {
+      pauseMatch();
+    }
+  }, [isActive, isPaused, matchPhase, pauseMatch]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -270,6 +282,15 @@ const MatchScreen: React.FC = () => {
             <Text style={styles.actionButtonText}>View My Squad</Text>
           </Pressable>
         </View>
+
+        {(isPaused || matchPhase !== 'live') && (
+          <Pressable
+            style={({ pressed }) => [styles.actionButton, styles.resetButton, pressed && styles.buttonPressed]}
+            onPress={resetMatch}
+          >
+            <Text style={styles.actionButtonText}>Reset Match</Text>
+          </Pressable>
+        )}
       </View>
 
       <Modal visible={isHalfTime} transparent animationType="fade">
@@ -805,5 +826,10 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontWeight: '700',
     fontSize: 12,
+  },
+  resetButton: {
+    marginTop: 8,
+    backgroundColor: '#d32f2f',
+    borderColor: '#b71c1c',
   },
 });

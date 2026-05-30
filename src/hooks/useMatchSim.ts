@@ -40,6 +40,7 @@ interface UseMatchSimResult {
   resumeSecondHalf: () => void;
   shootPenalty: (direction: 'LEFT' | 'MIDDLE' | 'RIGHT') => void;
   resetMatch: () => void;
+  pauseMatch: () => void;
 }
 
 const MATCH_LENGTH = 90;
@@ -133,15 +134,16 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   useEffect(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
 
-    if (matchPhase === 'penalties') {
-      return () => {};
+    if (matchPhase === 'penalties' || isPaused || cpuLoading || cpuTeam.length < 11) {
+      return;
     }
 
     intervalRef.current = setInterval(() => {
       setClock((currentClock) => {
-        if (isPaused || cpuLoading || cpuTeam.length < 11 || currentClock >= MATCH_LENGTH) {
+        if (currentClock >= MATCH_LENGTH) {
           return currentClock;
         }
 
@@ -212,9 +214,13 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
       setActivePitch(nextPitch);
       setActiveBench(nextBench);
       setSubsRemaining((current) => current - 1);
+      
+      const outName = pitchPlayer?.name || (pitchPlayer as any)?.player_data?.name || 'Player';
+      const inName = nextPitch[pitchIndex]?.name || (nextPitch[pitchIndex] as any)?.player_data?.name || 'Player';
+
       setEvents((existing) => [
         ...existing,
-        `SUB: ${pitchPlayer.name} → ${nextPitch[pitchIndex].name}`,
+        `SUB: ${outName} → ${inName}`,
       ]);
       return true;
     },
@@ -223,6 +229,10 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
 
   const togglePause = useCallback(() => {
     setIsPaused((current) => !current);
+  }, []);
+
+  const pauseMatch = useCallback(() => {
+    setIsPaused(true);
   }, []);
 
   const openSubModal = useCallback(() => {
@@ -340,5 +350,6 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     resumeSecondHalf,
     shootPenalty,
     resetMatch,
+    pauseMatch,
   };
 };
