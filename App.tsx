@@ -7,12 +7,13 @@ import { SquadProvider } from './src/context/SquadContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+import MyPlayersScreen from './src/screens/MyPlayersScreen';
 
 const DraftScreenWithNav = DraftScreen as React.ComponentType<{ navigateToMatch: () => void }>;
 
 function MainApp() {
   const { session, loading } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs'>('draft');
+  const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs' | 'myclub'>('draft');
   const [isLoginView, setIsLoginView] = useState(true);
 
   if (loading) {
@@ -37,6 +38,7 @@ function MainApp() {
         {currentTab === 'draft' && <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />}
         {currentTab === 'match' && <MatchScreen />}
         {currentTab === 'packs' && <PackScreen />}
+        {currentTab === 'myclub' && <MyPlayersScreen />}
 
         <View style={styles.tabBar}>
           <Pressable
@@ -58,6 +60,13 @@ function MainApp() {
             onPress={() => setCurrentTab('packs')}
           >
             <Text style={[styles.tabText, currentTab === 'packs' && styles.tabTextActive]}>Packs</Text>
+          </Pressable>
+          
+          <Pressable
+            style={({ pressed }) => [styles.tabButton, currentTab === 'myclub' && styles.tabActive, pressed && styles.tabPressed]}
+            onPress={() => setCurrentTab('myclub')}
+          >
+            <Text style={[styles.tabText, currentTab === 'myclub' && styles.tabTextActive]}>My Club</Text>
           </Pressable>
         </View>
       </SafeAreaView>
