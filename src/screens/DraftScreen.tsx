@@ -44,7 +44,7 @@ const DraftScreen: React.FC = () => {
     restartDraft,
   } = useDraft();
 
-  const { commitSquad } = useSquad(); // Bring in global context to save the drafted squad
+  const { commitSquad, saveDraftToCloud } = useSquad(); // Bring in global context to save the drafted squad
 
   const [selectedSwapId, setSelectedSwapId] = useState<number | null>(null);
   const [selectedSwapSource, setSelectedSwapSource] = useState<'starter' | 'bench' | null>(null);
@@ -230,23 +230,32 @@ const DraftScreen: React.FC = () => {
           </ScrollView>
 
           <View style={styles.footerButtons}>
-            {/* Clear/Restart Button */}
-            <Pressable 
-              style={({ pressed }: { pressed: boolean }) => [styles.secondaryButton, pressed && styles.buttonPressed]} 
-              onPress={restartDraft}
-            >
-              <Text style={styles.secondaryButtonText}>Clear / Restart</Text>
-            </Pressable>
-
-            {/* Simulate Match Button */}
             <Pressable 
               style={({ pressed }: { pressed: boolean }) => [styles.primaryButton, pressed && styles.buttonPressed]} 
+              onPress={() => saveDraftToCloud(startingXI, bench)}
+            >
+              <Text style={styles.buttonText}>Save Draft to DB</Text>
+            </Pressable>
+            
+            <Pressable 
+              style={({ pressed }: { pressed: boolean }) => [
+                styles.primaryButton, 
+                pressed && styles.buttonPressed,
+                { backgroundColor: '#0f9d58' } // distinct green color for simulate
+              ]} 
               onPress={() => {
                 commitSquad(startingXI, bench);
                 alert("Squad locked! Tap the 'Match' tab at the bottom to begin.");
               }}
             >
               <Text style={styles.buttonText}>Simulate Match</Text>
+            </Pressable>
+
+            <Pressable 
+              style={({ pressed }: { pressed: boolean }) => [styles.secondaryButton, pressed && styles.buttonPressed]} 
+              onPress={restartDraft}
+            >
+              <Text style={styles.secondaryButtonText}>Clear / Restart</Text>
             </Pressable>
           </View>
         </ScrollView>
@@ -451,8 +460,8 @@ const styles = StyleSheet.create({
   },
   footerButtons: {
     marginTop: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
+    gap: 12,
   },
   statusContainer: {
     alignItems: 'center',
