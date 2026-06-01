@@ -119,8 +119,13 @@ const MyPlayersScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>MY CLUB</Text>
-        <Text style={styles.subtitle}>All the players you have collected.</Text>
+        <View>
+          <Text style={styles.title}>MY CLUB</Text>
+          <Text style={styles.subtitle}>All the players you have collected.</Text>
+        </View>
+        <TouchableOpacity onPress={fetchClub}>
+          <Text style={styles.refreshBtnText}>↻ Refresh</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.filterWrapper}>
@@ -167,7 +172,7 @@ export default MyPlayersScreen;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#070707', paddingTop: 20 },
-  header: { marginBottom: 10, paddingHorizontal: 16 },
+  header: { marginBottom: 10, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: '#ffffff', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
   subtitle: { color: '#b3b3b3', fontSize: 14, marginTop: 4 },
   
@@ -188,6 +193,7 @@ const styles = StyleSheet.create({
   },
   filterBtnText: { color: '#888888', fontSize: 13, fontWeight: 'bold' },
   filterBtnTextActive: { color: '#ffffff' },
+  refreshBtnText: { color: '#1f8cff', fontSize: 14, fontWeight: 'bold' },
 
   centerArea: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   emptyText: { color: '#888888', fontSize: 16, textAlign: 'center' },

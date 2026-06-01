@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, Pressable, ActivityIndicator, Alert, FlatList, Modal, TextInput, TouchableOpacity } from 'react-native';
 import { supabase } from '../api/supabaseClient';
 import { useAuth } from '../context/AuthContext';
@@ -70,21 +70,22 @@ const MySquadScreen: React.FC = () => {
   const [ownedPlayers, setOwnedPlayers] = useState<Player[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState<boolean>(false);
 
-  useEffect(() => {
-    const loadSquads = async () => {
-      if (!user) return;
-      const { data, error } = await supabase.from('my_squad').select('starting_xi').eq('user_id', user.id).single();
-      
-      if (!error && data?.starting_xi) {
-        if (data.starting_xi.squads) {
-          setSquadsList(data.starting_xi.squads);
-        } else if (Object.keys(data.starting_xi).length > 0) {
-          setSquadsList([{ id: 'legacy-1', name: 'My First Squad', squad: data.starting_xi }]);
-        }
+  const loadSquads = useCallback(async () => {
+    if (!user) return;
+    const { data, error } = await supabase.from('my_squad').select('starting_xi').eq('user_id', user.id).single();
+    
+    if (!error && data?.starting_xi) {
+      if (data.starting_xi.squads) {
+        setSquadsList(data.starting_xi.squads);
+      } else if (Object.keys(data.starting_xi).length > 0) {
+        setSquadsList([{ id: 'legacy-1', name: 'My First Squad', squad: data.starting_xi }]);
       }
-    };
-    loadSquads();
+    }
   }, [user]);
+
+  useEffect(() => {
+    loadSquads();
+  }, [loadSquads]);
 
   const handleOpenSelection = useCallback(async (slot: PositionSlot) => {
     if (!user) return;
@@ -99,10 +100,18 @@ const MySquadScreen: React.FC = () => {
       const validPos = getValidPositions(slot);
       const extracted: Player[] = [];
       
+      // Get IDs of players currently on the pitch to prevent duplicates
+      const activePlayers = Object.values(activeSquad).filter(Boolean) as Player[];
+      const placedPlayerIds = activePlayers.map((p) => p.id);
+      
       data?.forEach((row: any) => {
         const p = getPlayerData(row.player_data);
         if (p && validPos.includes(p.position)) {
-          if (!extracted.find((e) => e.id === p.id)) {
+          
+          // Strict ID check: Ignore the name entirely, only block if the exact ID is placed
+          const isAlreadyPlaced = placedPlayerIds.includes(p.id);
+
+          if (!isAlreadyPlaced && !extracted.find((e) => e.id === p.id)) {
             extracted.push(p);
           }
         }
@@ -115,7 +124,7 @@ const MySquadScreen: React.FC = () => {
     } finally {
       setLoadingPlayers(false);
     }
-  }, [user]);
+  }, [user, activeSquad]); // Added activeSquad dependency so it always has the latest pitch data
 
   const handleSelectPlayer = (player: Player) => {
     if (!selectedSlot) return;
@@ -200,8 +209,13 @@ const MySquadScreen: React.FC = () => {
     return (
       <SafeAreaView style={styles.screen}>
         <View style={styles.header}>
-          <Text style={styles.title}>MY SQUADS</Text>
-          <Text style={styles.subtitle}>Manage and build your custom teams.</Text>
+          <View>
+            <Text style={styles.title}>MY SQUADS</Text>
+            <Text style={styles.subtitle}>Manage and build your custom teams.</Text>
+          </View>
+          <TouchableOpacity onPress={loadSquads}>
+            <Text style={styles.refreshBtnText}>↻ Refresh</Text>
+          </TouchableOpacity>
         </View>
 
         <TouchableOpacity 
@@ -372,7 +386,7 @@ export default MySquadScreen;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: '#070707', paddingTop: 20 },
-  header: { paddingHorizontal: 16, marginBottom: 20 },
+  header: { paddingHorizontal: 16, marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: '#ffffff', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
   subtitle: { color: '#b3b3b3', fontSize: 14, marginTop: 4 },
   
@@ -382,6 +396,7 @@ const styles = StyleSheet.create({
   squadListName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   squadListCount: { color: '#888', marginTop: 5 },
   editArrow: { color: '#444', fontSize: 24, fontWeight: 'bold' },
+  refreshBtnText: { color: '#1f8cff', fontSize: 14, fontWeight: 'bold' },
   
   pitchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#070707', zIndex: 99999, elevation: 99999 },
   backButton: { paddingVertical: 10, paddingRight: 20 },

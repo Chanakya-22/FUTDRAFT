@@ -31,7 +31,7 @@ const PackScreen: React.FC = () => {
           <FlatList
             data={pulledPlayers}
             horizontal={true}
-            keyExtractor={(item) => item.id.toString()}
+            keyExtractor={(item, index) => `${item.id}-${index}`}
             renderItem={({ item }) => (
               <View style={styles.cardWrapper}>
                 <PlayerCard player={item} selected={false} onPress={() => {}} />
