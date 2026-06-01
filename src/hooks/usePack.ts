@@ -3,76 +3,16 @@ import { supabase } from '../api/supabaseClient';
 import { AuthContext } from '../context/AuthContext';
 import { Player } from '../types';
 
-type Tier = 'high' | 'mid' | 'base';
+export type PackType = 'STANDARD' | 'DELUXE' | 'ULTRA';
 
 type UsePackResult = {
   pulledPlayers: Player[];
   isOpening: boolean;
   error: string | null;
-  openPack: () => Promise<void>;
+  userCoins: number;
+  fetchBalance: () => Promise<void>;
+  openPack: (packType: PackType) => Promise<void>;
   discard: () => void;
-};
-
-const getRandomIntInclusive = (min: number, max: number): number =>
-  Math.floor(Math.random() * (max - min + 1)) + min;
-
-const getTierForRoll = (roll: number): Tier => {
-  if (roll <= 10) {
-    return 'high';
-  }
-  if (roll <= 50) {
-    return 'mid';
-  }
-  return 'base';
-};
-
-const addTierFilter = <T extends { gte: any; lte: any; lt: any }>(
-  query: T,
-  tier: Tier,
-): T => {
-  if (tier === 'high') {
-    return query.gte('rating', 88);
-  }
-  if (tier === 'mid') {
-    return query.gte('rating', 86).lte('rating', 87);
-  }
-  return query.lt('rating', 86);
-};
-
-const selectRandomPlayerForTier = async (tier: Tier): Promise<Player> => {
-  let countQuery = supabase.from('players').select('id', { count: 'exact' });
-  countQuery = addTierFilter(countQuery, tier);
-
-  const countResp = await countQuery;
-  if (countResp.error) {
-    throw countResp.error;
-  }
-
-  const total = typeof countResp.count === 'number'
-    ? countResp.count
-    : Array.isArray(countResp.data)
-      ? countResp.data.length
-      : 0;
-
-  if (total <= 0) {
-    throw new Error('No players available for the pulled tier');
-  }
-
-  const offset = Math.floor(Math.random() * total);
-  let rowQuery = supabase.from('players').select('*').range(offset, offset);
-  rowQuery = addTierFilter(rowQuery, tier);
-
-  const rowResp = await rowQuery;
-  if (rowResp.error) {
-    throw rowResp.error;
-  }
-
-  const players = (rowResp.data ?? []) as Player[];
-  if (players.length === 0) {
-    throw new Error('Failed to retrieve player for the pulled tier');
-  }
-
-  return players[0];
 };
 
 export const usePack = (): UsePackResult => {
@@ -82,22 +22,86 @@ export const usePack = (): UsePackResult => {
   const [pulledPlayers, setPulledPlayers] = useState<Player[]>([]);
   const [isOpening, setIsOpening] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [userCoins, setUserCoins] = useState<number>(0);
 
-  const openPack = useCallback(async (): Promise<void> => {
+  const fetchBalance = useCallback(async () => {
+    if (!user) return;
+    try {
+      const { data, error } = await supabase
+        .from('user_balances')
+        .select('coins')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (!error && data) {
+        setUserCoins(data.coins);
+      }
+    } catch (err) {
+      console.error('Failed to fetch balance:', err);
+    }
+  }, [user]);
+
+  const openPack = useCallback(async (packType: PackType): Promise<void> => {
+    if (!user) {
+      setError('User not authenticated.');
+      return;
+    }
+
     setIsOpening(true);
     setError(null);
     setPulledPlayers([]);
 
+    const costs = { STANDARD: 1000, DELUXE: 2000, ULTRA: 3000 };
+    const walkoutRatings = { STANDARD: 85, DELUXE: 88, ULTRA: 90 };
+
+    const cost = costs[packType];
+    const minWalkoutRating = walkoutRatings[packType];
+
+    if (userCoins < cost) {
+      setError('Insufficient Funds');
+      setIsOpening(false);
+      return;
+    }
+
     try {
-      const players = await Promise.all(
-        Array.from({ length: 5 }, () => {
-          const roll = getRandomIntInclusive(1, 100);
-          const tier = getTierForRoll(roll);
-          return selectRandomPlayerForTier(tier);
-        }),
-      );
+      // Query A: Walkout
+      const { data: walkoutData, error: walkoutError } = await supabase
+        .from('players')
+        .select('*')
+        .gte('rating', minWalkoutRating);
+
+      if (walkoutError) throw walkoutError;
+      if (!walkoutData || walkoutData.length === 0) {
+        throw new Error('No walkout players found');
+      }
+
+      const walkoutPlayer = walkoutData[Math.floor(Math.random() * walkoutData.length)];
+
+      // Query B: Fillers
+      const { data: fillersData, error: fillersError } = await supabase
+        .from('players')
+        .select('*')
+        .lt('rating', 85);
+
+      if (fillersError) throw fillersError;
+      if (!fillersData || fillersData.length < 10) {
+        throw new Error('Not enough filler players found');
+      }
+
+      const shuffledFillers = fillersData.sort(() => 0.5 - Math.random()).slice(0, 10);
+      const players = [walkoutPlayer, ...shuffledFillers];
 
       setPulledPlayers(players);
+
+      // Deduct coins
+      const newBalance = userCoins - cost;
+      const { error: updateError } = await supabase
+        .from('user_balances')
+        .update({ coins: newBalance })
+        .eq('user_id', user.id);
+
+      if (updateError) throw updateError;
+      setUserCoins(newBalance);
 
       // Background execution for saving players to the user's club
       if (user) {
@@ -159,12 +163,13 @@ export const usePack = (): UsePackResult => {
         savePackToMyClub();
       }
     } catch (err: unknown) {
+      console.error('Failed to open pack:', err);
       setError(err instanceof Error ? err.message : 'Failed to open pack');
       setPulledPlayers([]);
     } finally {
       setIsOpening(false);
     }
-  }, [user]);
+  }, [user, userCoins]);
 
   const discard = useCallback(() => {
     setPulledPlayers([]);
@@ -175,6 +180,8 @@ export const usePack = (): UsePackResult => {
     pulledPlayers,
     isOpening,
     error,
+    userCoins,
+    fetchBalance,
     openPack,
     discard,
   };
