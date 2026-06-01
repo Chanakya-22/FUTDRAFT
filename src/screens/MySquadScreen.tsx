@@ -4,6 +4,7 @@ import { supabase } from '../api/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { Player } from '../types';
+import { calculateSquadStats } from '../engine/ChemistryEngine';
 
 type PositionSlot = 'LW' | 'ST' | 'RW' | 'CM1' | 'CDM' | 'CM2' | 'LB' | 'CB1' | 'CB2' | 'RB' | 'GK';
 
@@ -124,7 +125,7 @@ const MySquadScreen: React.FC = () => {
     } finally {
       setLoadingPlayers(false);
     }
-  }, [user, activeSquad]); // Added activeSquad dependency so it always has the latest pitch data
+  }, [user, activeSquad]); 
 
   const handleSelectPlayer = (player: Player) => {
     if (!selectedSlot) return;
@@ -259,6 +260,9 @@ const MySquadScreen: React.FC = () => {
 
   const playersPlaced = Object.keys(activeSquad).length;
   const isSquadFull = playersPlaced === 11;
+  
+  // HUD Calculations
+  const { chemistry, ovr } = calculateSquadStats(activeSquad);
 
   return (
     <SafeAreaView style={styles.screen}>
@@ -283,6 +287,19 @@ const MySquadScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      {/* NEW HUD BANNER */}
+      <View style={styles.statsBanner}>
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>OVR</Text>
+          <Text style={styles.statValue}>{ovr}</Text>
+        </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statBox}>
+          <Text style={styles.statLabel}>CHEMISTRY</Text>
+          <Text style={styles.statValue}>{chemistry}</Text>
+        </View>
+      </View>
+
       <View style={styles.pitch}>
         {PITCH_LAYOUT.map((row, rowIndex) => (
           <View key={rowIndex} style={styles.pitchRow}>
@@ -291,7 +308,7 @@ const MySquadScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* 1. PLAYER SELECTION BOTTOM SHEET - Smaller window, bigger cards */}
+      {/* 1. PLAYER SELECTION BOTTOM SHEET */}
       {selectedSlot && (
         <View style={styles.selectionSheet}>
           <View style={styles.sheetHeader}>
@@ -324,7 +341,7 @@ const MySquadScreen: React.FC = () => {
         </View>
       )}
 
-      {/* 2. ACTION MENU BOTTOM SHEET - Smaller window, max card scale */}
+      {/* 2. ACTION MENU BOTTOM SHEET */}
       {actionMenuSlot && activeSquad[actionMenuSlot] && (
         <View style={styles.actionSheet}>
           <View style={styles.sheetHeader}>
@@ -405,6 +422,13 @@ const styles = StyleSheet.create({
   saveSquadBtnDisabled: { backgroundColor: '#333' },
   saveSquadBtnText: { color: '#fff', fontWeight: 'bold' },
 
+  // HUD STYLES
+  statsBanner: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 40, paddingVertical: 10, backgroundColor: '#0a1a10', marginHorizontal: 10, borderRadius: 12, marginTop: 5, marginBottom: 5, borderWidth: 1, borderColor: '#11331a' },
+  statBox: { alignItems: 'center' },
+  statLabel: { color: '#888', fontSize: 12, fontWeight: 'bold', letterSpacing: 1 },
+  statValue: { color: '#fff', fontSize: 24, fontWeight: '900' },
+  statDivider: { width: 1, height: 30, backgroundColor: '#333' },
+
   pitch: { flex: 1, backgroundColor: '#0a1a10', marginHorizontal: 10, borderRadius: 16, borderWidth: 2, borderColor: '#11331a', paddingVertical: 10, justifyContent: 'space-evenly', zIndex: 1 },
   pitchRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   
@@ -439,8 +463,8 @@ const styles = StyleSheet.create({
     width: CARD_W,
     height: CARD_H,
     transform: [{ scale: 0.6 }],
-    marginLeft: -50, // -(250 - 150) / 2
-    marginTop: -70,  // -(350 - 210) / 2
+    marginLeft: -50,
+    marginTop: -70,  
   },
 
   // SMALLER ACTION WINDOW, HUGE CARDS
@@ -454,8 +478,8 @@ const styles = StyleSheet.create({
     width: CARD_W,
     height: CARD_H,
     transform: [{ scale: 0.7 }],
-    marginLeft: -37, // -(250 - 175) / 2
-    marginTop: -52,  // -(350 - 245) / 2
+    marginLeft: -37, 
+    marginTop: -52,  
   },
 
   actionMenuButtons: { flex: 1, paddingLeft: 20, gap: 15 },

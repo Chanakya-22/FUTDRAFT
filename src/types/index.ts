@@ -3,8 +3,9 @@ export interface Player {
   name: string;
   rating: number;
   position: string;
-  club: string;
-  nation: string;
+  league?: string;
+  club?: string;
+  nation?: string;
   pace: number;
   shooting: number;
   passing: number;
