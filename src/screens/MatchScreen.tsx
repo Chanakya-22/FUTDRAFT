@@ -54,6 +54,8 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
     shootPenalty,
     pauseMatch,
     resetMatch,
+    coinsEarned,
+    matchResult,
   } = useMatchSim(startingXI, bench);
   const [cpuModalOpen, setCpuModalOpen] = useState(false);
   const [myModalOpen, setMyModalOpen] = useState(false);
@@ -218,6 +220,15 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
           <Text style={styles.scoreValue}>{score.cpu}</Text>
         </View>
       </View>
+
+      {matchPhase === 'fulltime' && (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>
+            {matchResult === 'WIN' ? 'MATCH VICTORIOUS' : matchResult === 'DRAW' ? 'MATCH DRAWN' : 'MATCH DEFEATED'}
+          </Text>
+          <Text style={styles.summaryCoins}>🪙 +{coinsEarned} Coins Deposited</Text>
+        </View>
+      )}
 
       <View style={styles.tickerSection}>
         <Text style={styles.sectionTitle}>Match Events</Text>
@@ -832,4 +843,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#d32f2f',
     borderColor: '#b71c1c',
   },
+  summaryCard: { backgroundColor: '#111', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#ffd700', alignItems: 'center' },
+  summaryTitle: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
+  summaryCoins: { color: '#ffd700', fontSize: 14, fontWeight: '700' },
 });
