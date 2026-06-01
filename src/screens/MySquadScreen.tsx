@@ -14,6 +14,10 @@ const PITCH_LAYOUT: PositionSlot[][] = [
   ['GK'],
 ];
 
+// Native Card Size Constants for Perfect Mathematical Scaling
+const CARD_W = 250;
+const CARD_H = 350;
+
 const getValidPositions = (slot: PositionSlot): string[] => {
   if (slot === 'LW') return ['LW', 'LM'];
   if (slot === 'RW') return ['RW', 'RM'];
@@ -48,44 +52,40 @@ interface SavedSquad {
 const MySquadScreen: React.FC = () => {
   const { user } = useAuth();
   
-  // App States
+  // Views & Lists
   const [viewMode, setViewMode] = useState<'LIST' | 'PITCH'>('LIST');
   const [squadsList, setSquadsList] = useState<SavedSquad[]>([]);
   
-  // Active Squad States
+  // Active Squad Builder
   const [activeSquadId, setActiveSquadId] = useState<string | null>(null);
   const [activeSquad, setActiveSquad] = useState<Partial<Record<PositionSlot, Player>>>({});
   const [squadNameInput, setSquadNameInput] = useState('');
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   
-  // UI Interaction States
+  // Interactions
   const [selectedSlot, setSelectedSlot] = useState<PositionSlot | null>(null);
   const [actionMenuSlot, setActionMenuSlot] = useState<PositionSlot | null>(null);
   
-  // Player Data States
+  // Database Query
   const [ownedPlayers, setOwnedPlayers] = useState<Player[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState<boolean>(false);
 
-  // Load Saved Squads on Mount
   useEffect(() => {
     const loadSquads = async () => {
       if (!user) return;
-      const { data, error } = await supabase.from('my_squad').select('squad_data').eq('user_id', user.id).single();
+      const { data, error } = await supabase.from('my_squad').select('starting_xi').eq('user_id', user.id).single();
       
-      if (!error && data?.squad_data) {
-        // Handle migration from old single-squad format to new array format
-        if (data.squad_data.squads) {
-          setSquadsList(data.squad_data.squads);
-        } else if (Object.keys(data.squad_data).length > 0) {
-          // Legacy format conversion
-          setSquadsList([{ id: 'legacy-1', name: 'My First Squad', squad: data.squad_data }]);
+      if (!error && data?.starting_xi) {
+        if (data.starting_xi.squads) {
+          setSquadsList(data.starting_xi.squads);
+        } else if (Object.keys(data.starting_xi).length > 0) {
+          setSquadsList([{ id: 'legacy-1', name: 'My First Squad', squad: data.starting_xi }]);
         }
       }
     };
     loadSquads();
   }, [user]);
 
-  // Handle clicking an empty slot or clicking "Swap"
   const handleOpenSelection = useCallback(async (slot: PositionSlot) => {
     if (!user) return;
     setActionMenuSlot(null);
@@ -154,7 +154,7 @@ const MySquadScreen: React.FC = () => {
 
     try {
       await supabase.from('my_squad').upsert(
-        { user_id: user?.id, squad_data: { squads: updatedList } },
+        { user_id: user?.id, starting_xi: { squads: updatedList } },
         { onConflict: 'user_id' }
       );
       setSquadsList(updatedList);
@@ -165,7 +165,11 @@ const MySquadScreen: React.FC = () => {
     }
   };
 
-  // ---------------- RENDERS ---------------- //
+  const handleBack = () => {
+    setViewMode('LIST');
+    setSelectedSlot(null);
+    setActionMenuSlot(null);
+  };
 
   const renderSlot = (slot: PositionSlot) => {
     const player = activeSquad[slot];
@@ -179,8 +183,7 @@ const MySquadScreen: React.FC = () => {
       >
         {player ? (
           <View style={styles.pitchCardWrapper}>
-             {/* STRICT ABSOLUTE SCALING FIX */}
-            <View style={styles.pitchCardScale}>
+            <View style={styles.pitchCardInner} pointerEvents="none">
               <PlayerCard player={player} selected={false} onPress={() => {}} />
             </View>
           </View>
@@ -216,7 +219,7 @@ const MySquadScreen: React.FC = () => {
         <FlatList
           data={squadsList}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ paddingHorizontal: 16, marginTop: 20 }}
+          contentContainerStyle={{ paddingHorizontal: 16, marginTop: 20, paddingBottom: 100 }}
           renderItem={({ item }) => (
             <TouchableOpacity 
               style={styles.squadListItem}
@@ -227,8 +230,11 @@ const MySquadScreen: React.FC = () => {
                 setViewMode('PITCH');
               }}
             >
-              <Text style={styles.squadListName}>{item.name}</Text>
-              <Text style={styles.squadListCount}>{Object.keys(item.squad).length}/11 Players</Text>
+              <View>
+                <Text style={styles.squadListName}>{item.name}</Text>
+                <Text style={styles.squadListCount}>{Object.keys(item.squad).length}/11 Players</Text>
+              </View>
+              <Text style={styles.editArrow}>→</Text>
             </TouchableOpacity>
           )}
           ListEmptyComponent={<Text style={styles.emptyText}>You haven't saved any squads yet.</Text>}
@@ -237,15 +243,18 @@ const MySquadScreen: React.FC = () => {
     );
   }
 
-  // PITCH VIEW
   const playersPlaced = Object.keys(activeSquad).length;
   const isSquadFull = playersPlaced === 11;
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* Dynamic Header for Pitch View */}
       <View style={styles.pitchHeader}>
-        <TouchableOpacity onPress={() => setViewMode('LIST')}>
+        <TouchableOpacity 
+          style={styles.backButton} 
+          onPress={handleBack}
+          hitSlop={{ top: 20, bottom: 20, left: 20, right: 20 }}
+          activeOpacity={0.6}
+        >
           <Text style={styles.backBtnText}>← Back</Text>
         </TouchableOpacity>
         
@@ -260,7 +269,6 @@ const MySquadScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {/* The 4-3-3 Pitch */}
       <View style={styles.pitch}>
         {PITCH_LAYOUT.map((row, rowIndex) => (
           <View key={rowIndex} style={styles.pitchRow}>
@@ -269,52 +277,52 @@ const MySquadScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* 1. PLAYER SELECTION BOTTOM SHEET */}
+      {/* 1. PLAYER SELECTION BOTTOM SHEET - Smaller window, bigger cards */}
       {selectedSlot && (
-        <View style={styles.bottomSheet}>
+        <View style={styles.selectionSheet}>
           <View style={styles.sheetHeader}>
              <Text style={styles.sheetTitle}>Select {selectedSlot}</Text>
-             <Pressable onPress={() => setSelectedSlot(null)}>
+             <TouchableOpacity style={styles.closeButton} onPress={() => setSelectedSlot(null)}>
                <Text style={styles.closeText}>Close</Text>
-             </Pressable>
+             </TouchableOpacity>
           </View>
           
           {loadingPlayers ? (
             <View style={styles.loaderArea}><ActivityIndicator color="#1f8cff" size="large" /></View>
           ) : ownedPlayers.length === 0 ? (
-            <View style={styles.loaderArea}><Text style={styles.emptyText}>No valid players found.</Text></View>
+            <View style={styles.loaderArea}><Text style={styles.emptyText}>No valid players found in your club.</Text></View>
           ) : (
             <FlatList
               horizontal
               showsHorizontalScrollIndicator={false}
               data={ownedPlayers}
               keyExtractor={(item) => item.id.toString()}
-              contentContainerStyle={{ alignItems: 'center' }}
+              contentContainerStyle={{ paddingHorizontal: 16 }}
               renderItem={({ item }) => (
-                <View style={styles.sheetCardWrapper}>
-                  <View style={styles.sheetCardScale}>
-                    <PlayerCard player={item} selected={false} onPress={() => handleSelectPlayer(item)} />
+                <Pressable style={styles.sheetCardWrapper} onPress={() => handleSelectPlayer(item)}>
+                  <View style={styles.sheetCardInner} pointerEvents="none">
+                    <PlayerCard player={item} selected={false} onPress={() => {}} />
                   </View>
-                </View>
+                </Pressable>
               )}
             />
           )}
         </View>
       )}
 
-      {/* 2. ACTION MENU BOTTOM SHEET (View, Swap, Remove) */}
+      {/* 2. ACTION MENU BOTTOM SHEET - Smaller window, max card scale */}
       {actionMenuSlot && activeSquad[actionMenuSlot] && (
-        <View style={[styles.bottomSheet, { height: 320 }]}>
+        <View style={styles.actionSheet}>
           <View style={styles.sheetHeader}>
              <Text style={styles.sheetTitle}>{activeSquad[actionMenuSlot]?.name} Options</Text>
-             <Pressable onPress={() => setActionMenuSlot(null)}>
+             <TouchableOpacity style={styles.closeButton} onPress={() => setActionMenuSlot(null)}>
                <Text style={styles.closeText}>Close</Text>
-             </Pressable>
+             </TouchableOpacity>
           </View>
           
           <View style={styles.actionMenuContent}>
              <View style={styles.actionMenuCardWrapper}>
-               <View style={styles.actionMenuCardScale}>
+               <View style={styles.actionMenuCardInner} pointerEvents="none">
                  <PlayerCard player={activeSquad[actionMenuSlot] as Player} selected={false} onPress={() => {}} />
                </View>
              </View>
@@ -324,7 +332,7 @@ const MySquadScreen: React.FC = () => {
                   <Text style={styles.actionBtnText}>Swap Player</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={[styles.actionBtn, styles.actionBtnDanger]} onPress={handleRemovePlayer}>
-                  <Text style={styles.actionBtnTextDanger}>Remove</Text>
+                  <Text style={styles.actionBtnTextDanger}>Remove from Squad</Text>
                 </TouchableOpacity>
              </View>
           </View>
@@ -338,10 +346,11 @@ const MySquadScreen: React.FC = () => {
             <Text style={styles.modalTitle}>Save Squad</Text>
             <TextInput 
               style={styles.modalInput} 
-              placeholder="Enter Squad Name (e.g. My Dream Team)" 
+              placeholder="Enter Squad Name (e.g. Dream Team)" 
               placeholderTextColor="#666"
               value={squadNameInput}
               onChangeText={setSquadNameInput}
+              autoFocus
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity onPress={() => setSaveModalVisible(false)} style={styles.modalBtn}>
@@ -367,57 +376,79 @@ const styles = StyleSheet.create({
   title: { color: '#ffffff', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
   subtitle: { color: '#b3b3b3', fontSize: 14, marginTop: 4 },
   
-  // List View Styles
   createNewBtn: { marginHorizontal: 16, backgroundColor: '#1f8cff', padding: 15, borderRadius: 10, alignItems: 'center' },
   createNewBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 16 },
-  squadListItem: { backgroundColor: '#111', padding: 16, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#333' },
+  squadListItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#111', padding: 16, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: '#333' },
   squadListName: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
   squadListCount: { color: '#888', marginTop: 5 },
+  editArrow: { color: '#444', fontSize: 24, fontWeight: 'bold' },
   
-  // Pitch View Header
-  pitchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 10 },
+  pitchHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#070707', zIndex: 99999, elevation: 99999 },
+  backButton: { paddingVertical: 10, paddingRight: 20 },
   backBtnText: { color: '#1f8cff', fontSize: 16, fontWeight: 'bold' },
   saveSquadBtn: { backgroundColor: '#28a745', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 8 },
   saveSquadBtnDisabled: { backgroundColor: '#333' },
   saveSquadBtnText: { color: '#fff', fontWeight: 'bold' },
 
-  // Pitch Styles
-  pitch: { flex: 1, backgroundColor: '#0a1a10', marginHorizontal: 10, borderRadius: 16, borderWidth: 2, borderColor: '#11331a', paddingVertical: 20, justifyContent: 'space-around' },
+  pitch: { flex: 1, backgroundColor: '#0a1a10', marginHorizontal: 10, borderRadius: 16, borderWidth: 2, borderColor: '#11331a', paddingVertical: 10, justifyContent: 'space-evenly', zIndex: 1 },
   pitchRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },
   
-  slotContainer: { width: 70, height: 100, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
+  // UNCHANGED PITCH STYLES
+  slotContainer: { width: 88, height: 124, justifyContent: 'center', alignItems: 'center', borderRadius: 8 },
   slotSelected: { borderWidth: 2, borderColor: '#1f8cff', backgroundColor: 'rgba(31, 140, 255, 0.2)' },
-  
-  // FIXED: Absolute Positioning removes the layout footprint so cards don't overlap
-  pitchCardWrapper: { width: 70, height: 100, justifyContent: 'center', alignItems: 'center' },
-  pitchCardScale: { position: 'absolute', transform: [{ scale: 0.43 }] },
+  pitchCardWrapper: { width: 88, height: 124, overflow: 'visible' },
+  pitchCardInner: {
+    width: CARD_W,
+    height: CARD_H,
+    transform: [{ scale: 0.35 }],
+    marginLeft: -81,
+    marginTop: -113, 
+  },
   
   emptySlot: { width: 50, height: 70, backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.3)', justifyContent: 'center', alignItems: 'center' },
   emptySlotText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
   
-  // Bottom Sheets
-  bottomSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 260, backgroundColor: '#111111', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderColor: '#222', padding: 16, zIndex: 100 },
-  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
+  // SMALLER SHEET WINDOW, BIGGER CARDS
+  selectionSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 280, backgroundColor: '#111111', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderColor: '#222', paddingVertical: 16, zIndex: 100, elevation: 10 },
+  
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 16, marginBottom: 16 },
   sheetTitle: { color: '#ffffff', fontSize: 16, fontWeight: 'bold' },
+  closeButton: { paddingLeft: 20, paddingVertical: 5 },
   closeText: { color: '#1f8cff', fontSize: 14, fontWeight: 'bold' },
   loaderArea: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   emptyText: { color: '#888888', textAlign: 'center', marginTop: 20 },
   
-  // FIXED: Horizontal Swipe Container
-  sheetCardWrapper: { width: 110, height: 160, justifyContent: 'center', alignItems: 'center', marginHorizontal: 5 },
-  sheetCardScale: { position: 'absolute', transform: [{ scale: 0.65 }] },
+  // SELECTION CARD MATH (Scale 0.6)
+  sheetCardWrapper: { width: 150, height: 210, marginHorizontal: 8, overflow: 'visible' },
+  sheetCardInner: {
+    width: CARD_W,
+    height: CARD_H,
+    transform: [{ scale: 0.6 }],
+    marginLeft: -50, // -(250 - 150) / 2
+    marginTop: -70,  // -(350 - 210) / 2
+  },
 
-  // Action Menu
-  actionMenuContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 10 },
-  actionMenuCardWrapper: { width: 140, height: 200, justifyContent: 'center', alignItems: 'center' },
-  actionMenuCardScale: { position: 'absolute', transform: [{ scale: 0.8 }] },
+  // SMALLER ACTION WINDOW, HUGE CARDS
+  actionSheet: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 310, backgroundColor: '#111111', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderColor: '#222', paddingVertical: 16, zIndex: 100, elevation: 10 },
+  
+  actionMenuContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 16, marginTop: 10 },
+  
+  // ACTION MENU CARD MATH (Scale 0.7)
+  actionMenuCardWrapper: { width: 175, height: 245, overflow: 'visible' },
+  actionMenuCardInner: {
+    width: CARD_W,
+    height: CARD_H,
+    transform: [{ scale: 0.7 }],
+    marginLeft: -37, // -(250 - 175) / 2
+    marginTop: -52,  // -(350 - 245) / 2
+  },
+
   actionMenuButtons: { flex: 1, paddingLeft: 20, gap: 15 },
   actionBtn: { backgroundColor: '#222', paddingVertical: 12, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#444' },
   actionBtnDanger: { borderColor: '#ff4444', backgroundColor: 'rgba(255, 68, 68, 0.1)' },
   actionBtnText: { color: '#fff', fontWeight: 'bold' },
   actionBtnTextDanger: { color: '#ff4444', fontWeight: 'bold' },
 
-  // Modal
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '80%', backgroundColor: '#111', padding: 20, borderRadius: 15, borderWidth: 1, borderColor: '#333' },
   modalTitle: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 15 },
