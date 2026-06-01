@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useContext } from 'react';
+import { AuthContext } from '../context/AuthContext';
 import { Player } from '../types';
-import { evaluateEncounter, Mentality } from '../engine/MatchMath';
+import { calculateTeamOVR, MatchStats, simulateMatch, generateOpponent } from '../engine/MatchMath';
 import { supabase } from '../api/supabaseClient';
+
+export type Mentality = 'attack' | 'balanced' | 'defense';
 
 interface MatchScore {
   user: number;
@@ -32,6 +35,8 @@ interface UseMatchSimResult {
   penaltyShootout: { user: number; cpu: number };
   userPenaltyLog: PenaltyOutcome[];
   cpuPenaltyLog: PenaltyOutcome[];
+  coinsEarned: number;
+  matchResult: 'WIN' | 'DRAW' | 'LOSS' | null;
   setMentality: (mentality: Mentality) => void;
   togglePause: () => void;
   openSubModal: () => void;
@@ -46,7 +51,6 @@ interface UseMatchSimResult {
 const MATCH_LENGTH = 90;
 const MAX_SUBS = 4;
 const TICK_MS = 1000;
-const ENCOUNTER_CHANCE = 0.45;
 
 const shufflePlayers = <T,>(items: T[]): T[] => {
   const result = [...items];
@@ -58,6 +62,9 @@ const shufflePlayers = <T,>(items: T[]): T[] => {
 };
 
 export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimResult => {
+  const authContext = useContext(AuthContext);
+  const user = authContext?.session?.user;
+
   const [clock, setClock] = useState(0);
   const [score, setScore] = useState<MatchScore>({ user: 0, cpu: 0 });
   const [events, setEvents] = useState<string[]>([]);
@@ -80,31 +87,20 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   const [cpuPenaltyLog, setCpuPenaltyLog] = useState<PenaltyOutcome[]>(
     Array(5).fill('pending'),
   );
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Game Economy State variables
+  const [coinsEarned, setCoinsEarned] = useState<number>(0);
+  const [matchResult, setMatchResult] = useState<'WIN' | 'DRAW' | 'LOSS' | null>(null);
 
-  const resetMatch = useCallback(() => {
-    setClock(0);
-    setScore({ user: 0, cpu: 0 });
-    setEvents([]);
-    setMentality('balanced');
-    setIsPaused(true);
-    setIsHalfTime(false);
-    setMatchPhase('live');
-    setActivePitch([...startingXI]);
-    setActiveBench([...bench]);
-    setSubsRemaining(MAX_SUBS);
-    setSubModalOpen(false);
-    setPenaltyTurn(null);
-    setPenaltyRound(0);
-    setPenaltyShootout({ user: 0, cpu: 0 });
-    setUserPenaltyLog(Array(5).fill('pending'));
-    setCpuPenaltyLog(Array(5).fill('pending'));
-  }, [bench, startingXI]);
+  // Platform agnostic reference for React Native timers
+  const intervalRef = useRef<any>(null);
+  const preSimRef = useRef<any>(null);
+  const hasRewarded = useRef(false);
 
   const fetchCpuTeam = useCallback(async () => {
     setCpuLoading(true);
     const { data, error } = await supabase
-      .from<Player>('players')
+      .from('players')
       .select('*')
       .gte('rating', 80)
       .order('rating', { ascending: false })
@@ -123,14 +119,124 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     const shuffled = shufflePlayers(data);
     const selected = shuffled.slice(0, 11);
     setCpuTeam(selected);
+
+    // Generate a premium European Club opponent profile
+    const oppProfile = generateOpponent();
+
+    // Compile Match statistics for the Simulation Engine
+    const userStats: MatchStats = {
+      ovr: calculateTeamOVR(startingXI),
+      chemistry: 100,
+    };
+    const cpuStats: MatchStats = {
+      ovr: calculateTeamOVR(selected),
+      chemistry: oppProfile.chemistry,
+      name: oppProfile.name,
+    };
+
+    // Pre-simulate the match timeline
+    const preSim = simulateMatch(userStats, cpuStats);
+    preSimRef.current = preSim;
+
+    // Initialize the ticker display with the kickoff message
+    if (preSim.events.length > 0) {
+      setEvents([preSim.events[0]]);
+    } else {
+      setEvents([`Kickoff! Match against ${oppProfile.name} begins.`]);
+    }
+
     setCpuLoading(false);
     setIsPaused(false);
-  }, []);
+  }, [startingXI]);
+
+  const resetMatch = useCallback(() => {
+    setClock(0);
+    setScore({ user: 0, cpu: 0 });
+    setEvents([]);
+    setMentality('balanced');
+    setIsPaused(true);
+    setIsHalfTime(false);
+    setMatchPhase('live');
+    setActivePitch([...startingXI]);
+    setActiveBench([...bench]);
+    setSubsRemaining(MAX_SUBS);
+    setSubModalOpen(false);
+    setPenaltyTurn(null);
+    setPenaltyRound(0);
+    setPenaltyShootout({ user: 0, cpu: 0 });
+    setUserPenaltyLog(Array(5).fill('pending'));
+    setCpuPenaltyLog(Array(5).fill('pending'));
+    setCoinsEarned(0);
+    setMatchResult(null);
+    hasRewarded.current = false;
+    preSimRef.current = null;
+    
+    // Regenerate a brand new team on reset for ultimate replayability
+    fetchCpuTeam();
+  }, [bench, startingXI, fetchCpuTeam]);
 
   useEffect(() => {
     fetchCpuTeam();
   }, [fetchCpuTeam]);
 
+  // Secure Coin Rewards Ledger updates
+  useEffect(() => {
+    if (matchPhase === 'fulltime' && user && !hasRewarded.current) {
+      hasRewarded.current = true;
+
+      const finalizeMatchAndReward = async () => {
+        let finalResult: 'WIN' | 'DRAW' | 'LOSS' = 'DRAW';
+        let finalCoins = 200;
+
+        // Determine outcome based on 90 minutes or Interactive Penalty Shootout
+        if (score.user > score.cpu) {
+          finalResult = 'WIN';
+          finalCoins = 500;
+        } else if (score.cpu > score.user) {
+          finalResult = 'LOSS';
+          finalCoins = 100;
+        } else {
+          // Normal time was a draw, evaluate the interactive penalty marks
+          if (penaltyShootout.user > penaltyShootout.cpu) {
+            finalResult = 'WIN';
+            finalCoins = 500;
+          } else if (penaltyShootout.cpu > penaltyShootout.user) {
+            finalResult = 'LOSS';
+            finalCoins = 100;
+          }
+        }
+
+        setCoinsEarned(finalCoins);
+        setMatchResult(finalResult);
+
+        setEvents((existing) => [
+          ...existing,
+          `💰 Match Rewards: ${finalCoins} Coins Earned!`,
+        ]);
+
+        try {
+          const { data: currentBalance } = await supabase
+            .from('user_balances')
+            .select('coins')
+            .eq('user_id', user.id)
+            .single();
+          
+          if (currentBalance) {
+            await supabase
+              .from('user_balances')
+              .update({ coins: currentBalance.coins + finalCoins })
+              .eq('user_id', user.id);
+          }
+        } catch (err) {
+          console.error('Failed to reward coins:', err);
+        }
+      };
+
+      finalizeMatchAndReward();
+    }
+  }, [matchPhase, user, score, penaltyShootout]);
+
+  // Minute-by-Minute Live Simulation Ticker
   useEffect(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -158,7 +264,8 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
 
         if (nextClock >= MATCH_LENGTH) {
           setIsPaused(true);
-          if (score.user === score.cpu) {
+          // Check if normal time demands sudden death shootouts
+          if (preSimRef.current?.userScore === preSimRef.current?.oppScore) {
             setMatchPhase('penalties');
             setPenaltyTurn('user_shoot');
             setPenaltyRound(1);
@@ -170,15 +277,22 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
           return nextClock;
         }
 
-        if (Math.random() < ENCOUNTER_CHANCE) {
-          const encounter = evaluateEncounter(mentality, activePitch, cpuTeam);
-          setEvents((existing) => [...existing, `${nextClock}' ${encounter.message}`]);
+        // Parse and playback pre-simulated timeline events matching the current minute
+        if (preSimRef.current) {
+          const minutePrefix = `${nextClock}'`;
+          const currentMinEvents = preSimRef.current.events.filter((e: string) => e.startsWith(minutePrefix));
+          
+          if (currentMinEvents.length > 0) {
+            currentMinEvents.forEach((eventText: string) => {
+              setEvents((existing) => [...existing, eventText]);
 
-          if (encounter.type === 'goal') {
-            setScore((previous) => ({
-              user: encounter.team === 'user' ? previous.user + 1 : previous.user,
-              cpu: encounter.team === 'cpu' ? previous.cpu + 1 : previous.cpu,
-            }));
+              // Synchronize interactive score state variables dynamically
+              if (eventText.includes('⚽ GOAL for You!')) {
+                setScore((prev) => ({ ...prev, user: prev.user + 1 }));
+              } else if (eventText.includes('🔴 GOAL for')) {
+                setScore((prev) => ({ ...prev, cpu: prev.cpu + 1 }));
+              }
+            });
           }
         }
 
@@ -342,6 +456,8 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     penaltyShootout,
     userPenaltyLog,
     cpuPenaltyLog,
+    coinsEarned,
+    matchResult,
     setMentality,
     togglePause,
     openSubModal,
