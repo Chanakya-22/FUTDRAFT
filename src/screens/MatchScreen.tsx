@@ -25,7 +25,7 @@ interface MatchScreenProps {
 }
 
 const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
-  const { startingXI, bench } = useSquad();
+  const { startingXI, bench, clearSquad } = useSquad();
   const {
     clock,
     score,
@@ -92,6 +92,12 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
       setSelectedBenchId(null);
       closeSubModal();
     }
+  };
+
+  // NEW: Exit sequence to clean up the engine AND wipe the draft
+  const handleExitMatch = () => {
+    resetMatch();
+    if (clearSquad) clearSquad();
   };
 
   const openCpuModal = () => setCpuModalOpen(true);
@@ -221,15 +227,6 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
         </View>
       </View>
 
-      {matchPhase === 'fulltime' && (
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryTitle}>
-            {matchResult === 'WIN' ? 'MATCH VICTORIOUS' : matchResult === 'DRAW' ? 'MATCH DRAWN' : 'MATCH DEFEATED'}
-          </Text>
-          <Text style={styles.summaryCoins}>🪙 +{coinsEarned} Coins Deposited</Text>
-        </View>
-      )}
-
       <View style={styles.tickerSection}>
         <Text style={styles.sectionTitle}>Match Events</Text>
         <ScrollView ref={scrollRef} style={styles.tickerBox} contentContainerStyle={styles.tickerContent}>
@@ -241,68 +238,85 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
         </ScrollView>
       </View>
 
-      <View style={styles.controlsBox}>
-        <View style={styles.mentalityRow}>
-          {mentalityOptions.map((option) => (
+      {/* Conditionally Render: Rewards Box at Full Time, Controls during Live Match */}
+      {matchPhase === 'fulltime' ? (
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>
+            {matchResult === 'WIN' ? 'MATCH VICTORIOUS' : matchResult === 'DRAW' ? 'MATCH DRAWN' : 'MATCH DEFEATED'}
+          </Text>
+          <Text style={styles.summaryCoins}>🪙 +{coinsEarned} Coins Deposited</Text>
+          
+          <Pressable
+            style={({ pressed }) => [styles.exitMatchButton, pressed && styles.buttonPressed]}
+            onPress={handleExitMatch}
+          >
+            <Text style={styles.exitMatchButtonText}>Claim & Return to Hub</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={styles.controlsBox}>
+          <View style={styles.mentalityRow}>
+            {mentalityOptions.map((option) => (
+              <Pressable
+                key={option.value}
+                style={({ pressed }) => [
+                  styles.mentalityButton,
+                  mentality === option.value && styles.mentalityActive,
+                  pressed && styles.buttonPressed,
+                ]}
+                onPress={() => setMentality(option.value)}
+              >
+                <Text style={styles.mentalityText}>{option.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+
+            <View style={styles.actionRow}>
             <Pressable
-              key={option.value}
+              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+              onPress={togglePause}
+              disabled={matchPhase !== 'live'}
+            >
+              <Text style={styles.actionButtonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
+            </Pressable>
+
+            <Pressable
               style={({ pressed }) => [
-                styles.mentalityButton,
-                mentality === option.value && styles.mentalityActive,
+                styles.actionButton,
+                subsRemaining <= 0 && styles.buttonDisabled,
                 pressed && styles.buttonPressed,
               ]}
-              onPress={() => setMentality(option.value)}
+              onPress={openSubModal}
+              disabled={subsRemaining <= 0 || matchPhase !== 'live'}
             >
-              <Text style={styles.mentalityText}>{option.label}</Text>
+              <Text style={styles.actionButtonText}>Sub ({subsRemaining})</Text>
             </Pressable>
-          ))}
+
+            <Pressable
+              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+              onPress={openCpuModal}
+            >
+              <Text style={styles.actionButtonText}>View CPU Squad</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+              onPress={openMyModal}
+            >
+              <Text style={styles.actionButtonText}>View My Squad</Text>
+            </Pressable>
+          </View>
+
+          {(isPaused || matchPhase !== 'live') && (
+            <Pressable
+              style={({ pressed }) => [styles.actionButton, styles.resetButton, pressed && styles.buttonPressed]}
+              onPress={resetMatch}
+            >
+              <Text style={styles.actionButtonText}>Reset Match</Text>
+            </Pressable>
+          )}
         </View>
-
-          <View style={styles.actionRow}>
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
-            onPress={togglePause}
-            disabled={matchPhase !== 'live'}
-          >
-            <Text style={styles.actionButtonText}>{isPaused ? 'Resume' : 'Pause'}</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.actionButton,
-              subsRemaining <= 0 && styles.buttonDisabled,
-              pressed && styles.buttonPressed,
-            ]}
-            onPress={openSubModal}
-            disabled={subsRemaining <= 0 || matchPhase !== 'live'}
-          >
-            <Text style={styles.actionButtonText}>Sub ({subsRemaining})</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
-            onPress={openCpuModal}
-          >
-            <Text style={styles.actionButtonText}>View CPU Squad</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
-            onPress={openMyModal}
-          >
-            <Text style={styles.actionButtonText}>View My Squad</Text>
-          </Pressable>
-        </View>
-
-        {(isPaused || matchPhase !== 'live') && (
-          <Pressable
-            style={({ pressed }) => [styles.actionButton, styles.resetButton, pressed && styles.buttonPressed]}
-            onPress={resetMatch}
-          >
-            <Text style={styles.actionButtonText}>Reset Match</Text>
-          </Pressable>
-        )}
-      </View>
+      )}
 
       <Modal visible={isHalfTime} transparent animationType="fade">
         <View style={styles.halftimeOverlay}>
@@ -791,6 +805,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#2a2a2a',
   },
+  cancelButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  confirmButton: {
+    flex: 1,
+    backgroundColor: '#1f8cff',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#1f8cff',
+  },
+  confirmButtonText: {
+    color: '#ffffff',
+    fontWeight: '700',
+    fontSize: 12,
+  },
   ovrBadge: {
     marginTop: 4,
     backgroundColor: '#1a1a1a',
@@ -819,31 +852,45 @@ const styles = StyleSheet.create({
   cpuCardWrapper: {
     marginBottom: 10,
   },
-  cancelButtonText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  confirmButton: {
-    flex: 1,
-    backgroundColor: '#1f8cff',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#1f8cff',
-  },
-  confirmButtonText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 12,
-  },
   resetButton: {
     marginTop: 8,
     backgroundColor: '#d32f2f',
     borderColor: '#b71c1c',
   },
-  summaryCard: { backgroundColor: '#111', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#ffd700', alignItems: 'center' },
-  summaryTitle: { color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
-  summaryCoins: { color: '#ffd700', fontSize: 14, fontWeight: '700' },
+  summaryCard: {
+    backgroundColor: '#111',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#ffd700',
+    alignItems: 'center',
+  },
+  summaryTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  summaryCoins: {
+    color: '#ffd700',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 16,
+  },
+  exitMatchButton: {
+    backgroundColor: '#1f8cff',
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  exitMatchButtonText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 14,
+  },
 });
