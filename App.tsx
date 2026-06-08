@@ -5,6 +5,7 @@ import MatchScreen from './src/screens/MatchScreen';
 import PackScreen from './src/screens/PackScreen';
 import { SquadProvider } from './src/context/SquadContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
+import { ErrorBoundary } from './src/components/ErrorBoundary';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import MyPlayersScreen from './src/screens/MyPlayersScreen';
@@ -93,10 +94,13 @@ function MainApp() {
   );
 }
 
+
 export default function App() {
   return (
     <AuthProvider>
-      <MainApp />
+      <ErrorBoundary>
+        <MainApp />
+      </ErrorBoundary>
     </AuthProvider>
   );
 }
