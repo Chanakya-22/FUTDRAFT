@@ -5,7 +5,12 @@ export interface MatchResult { userScore: number; oppScore: number; events: stri
 
 export const calculateTeamOVR = (players: Player[]): number => {
   if (!players || players.length === 0) return 0;
-  const total = players.reduce((sum, player) => sum + player.rating, 0);
+  const total = players.reduce((sum, player) => {
+    const rating = typeof player.rating === 'number'
+      ? player.rating
+      : Number((player as any)?.rating) || Number((player as any)?.player_data?.rating) || 0;
+    return sum + rating;
+  }, 0);
   return Math.round(total / players.length);
 };
 
@@ -73,30 +78,45 @@ export const evaluateLiveMinute = (
   const userDefend = getDefenseProfile(userTeam);
   const cpuDefend = getDefenseProfile(cpuTeam);
 
-  const tempoModifier = minute > 75 ? 1.08 : minute > 60 ? 1.04 : 1;
-  const userRisk = scoreDiff < 0 ? 0.02 : scoreDiff > 0 ? -0.01 : 0;
-  const cpuRisk = scoreDiff > 0 ? 0.02 : scoreDiff < 0 ? -0.01 : 0;
-
-  const userAttackPower = userAttack * (mentality === 'attack' ? 1.18 : mentality === 'defense' ? 0.92 : 1);
-  const userDefensePower = userDefend * (mentality === 'defense' ? 1.12 : mentality === 'attack' ? 0.9 : 1);
-  const cpuAttackPower = cpuAttack;
-  const cpuDefensePower = cpuDefend;
+  const ovrDelta = (userOVR - cpuOVR) * 0.0018;
+  const userAttackDelta = (userAttack - cpuDefend) * 0.0002;
+  const cpuAttackDelta = (cpuAttack - userDefend) * 0.0002;
+  const userTrailing = scoreDiff < 0 ? 0.0035 : scoreDiff > 0 ? -0.0015 : 0;
+  const cpuTrailing = scoreDiff > 0 ? 0.0035 : scoreDiff < 0 ? -0.0015 : 0;
+  const latePressure = minute > 80 ? 0.0028 : minute > 70 ? 0.0015 : 0;
 
   const userGoalProb = clamp(
-    (0.028 + (userOVR - cpuOVR) * 0.0025 + (userAttackPower - cpuDefensePower) * 0.0006 + userRisk + (minute > 80 ? 0.008 : 0)) * tempoModifier,
-    0.004,
-    0.14,
+    0.003 + ovrDelta + userAttackDelta + userTrailing + (mentality === 'attack' ? 0.0012 : mentality === 'defense' ? -0.0008 : 0) + latePressure,
+    0.002,
+    0.045,
   );
 
   const cpuGoalProb = clamp(
-    (0.028 - (userOVR - cpuOVR) * 0.0025 + (cpuAttackPower - userDefensePower) * 0.0006 + cpuRisk + (minute > 80 ? 0.006 : 0)) * tempoModifier,
-    0.004,
-    0.14,
+    0.003 - ovrDelta + cpuAttackDelta + cpuTrailing + (mentality === 'defense' ? 0.0008 : mentality === 'attack' ? -0.001 : 0) + latePressure * 0.9,
+    0.002,
+    0.045,
   );
 
-  const chanceIntensity = clamp(0.12 + Math.abs(userOVR - cpuOVR) * 0.0015 + (Math.abs(scoreDiff) >= 1 ? 0.01 : 0) + (minute > 70 ? 0.02 : 0), 0.06, 0.24);
-  const foulIntensity = clamp(0.07 + (minute > 75 ? 0.01 : 0) + (Math.abs(scoreDiff) >= 2 ? 0.01 : 0), 0.04, 0.18);
-  const yellowChance = clamp(0.008 + (minute > 70 ? 0.003 : 0) + (Math.abs(scoreDiff) >= 2 ? 0.002 : 0), 0.006, 0.015);
+  const chanceIntensity = clamp(
+    0.07 + Math.abs(userOVR - cpuOVR) * 0.0004 + (minute > 70 ? 0.008 : 0),
+    0.03,
+    0.12,
+  );
+  const cornerChanceProb = clamp(
+    0.03 + (minute > 70 ? 0.005 : 0) + Math.abs(userOVR - cpuOVR) * 0.00015,
+    0.02,
+    0.08,
+  );
+  const foulIntensity = clamp(
+    0.045 + (minute > 75 ? 0.004 : 0) + (Math.abs(scoreDiff) >= 2 ? 0.004 : 0),
+    0.03,
+    0.1,
+  );
+  const yellowChance = clamp(
+    0.005 + (minute > 75 ? 0.0025 : 0) + (Math.abs(scoreDiff) >= 2 ? 0.0015 : 0),
+    0.0035,
+    0.01,
+  );
 
   const rand = Math.random();
   if (rand < userGoalProb) {
@@ -137,8 +157,7 @@ export const evaluateLiveMinute = (
     };
   }
 
-  const cornerChance = clamp(0.04 + Math.abs(userOVR - cpuOVR) * 0.0008 + (minute > 70 ? 0.008 : 0), 0.03, 0.12);
-  if (rand < userGoalProb + cpuGoalProb + chanceIntensity + cornerChance) {
+  if (rand < userGoalProb + cpuGoalProb + chanceIntensity + cornerChanceProb) {
     const isUser = Math.random() > 0.5;
     return {
       type: 'corner',
@@ -149,7 +168,7 @@ export const evaluateLiveMinute = (
     };
   }
 
-  if (rand < userGoalProb + cpuGoalProb + chanceIntensity + cornerChance + foulIntensity) {
+  if (rand < userGoalProb + cpuGoalProb + chanceIntensity + cornerChanceProb + foulIntensity) {
     const isUser = Math.random() > 0.5;
     const player = pickPlayerWeighted(isUser ? userTeam : cpuTeam, false);
     return {
