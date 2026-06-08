@@ -1,0 +1,38 @@
+FROM AGENt, to be executed when i'm done with the main feats
+
+
+Phase H: Infrastructure & Stability (The "Polish" Phase)
+Before we release, we must harden the app against real-world usage.
+
+Error Boundary Implementation: Wrap your top-level navigation in ErrorBoundaries so that if a match engine error occurs, the app gracefully returns the user to the lobby instead of crashing the entire session.
+
+State Persistence (AsyncStorage): Currently, if the user closes the app mid-match, the state is wiped. We will use @react-native-async-storage/async-storage to save the currentTab, matchPhase, and score locally so users can resume a match if they accidentally close the app.
+
+Supabase Row Level Security (RLS) Audit: Ensure your my_players and user_balances tables have strict RLS policies enabled so that one user cannot programmatically access another user's coin balance or club inventory.
+
+Phase I: Quality Assurance & UX Testing
+We need to verify the game balance before real players touch it.
+
+Balancing Pass: We will run 100 automated simulations to ensure the win/loss distribution against 75-90 OVR CPU teams is fair. We want to ensure an 85 OVR user team has a roughly 50-60% win rate against 80 OVR CPU teams.
+
+Device Compatibility Testing: Test the draft and match layouts on different screen sizes (specifically the Samsung Galaxy Tab A8 you own versus a standard phone) to ensure your custom absolute positioning and transform: scale properties don't break.
+
+Latency Mocking: Simulate a "bad internet" environment to ensure the coin update requests don't hang the UI (we will implement "Optimistic UI" updates for the wallet balance).
+
+Phase J: Build & Release Readiness
+This is where we prepare the "production" artifacts.
+
+Asset Compression: We will compress your player card images (if stored in Drive/Storage) and implement an image caching solution (like expo-image) to stop the "flicker" effect when players load in the grid.
+
+Environment Variables: Move your Supabase keys out of the codebase and into .env files using expo-constants to secure your project configuration.
+
+Production Build Generation: Create the APK (Android) or IPA (iOS) bundles. We will use EAS Build (Expo Application Services) to generate optimized, minified production binaries.
+
+Phase K: Deployment & Beta Testing
+The final step.
+
+Internal Testing: Deploy an internal release to a small group (using Google Play Console "Internal Testing" track).
+
+Final Bug Squashing: Monitor the "Crashlytics" logs from the test group to catch any final edge-case bugs.
+
+Production Launch: Promote the bundle to the public store.
