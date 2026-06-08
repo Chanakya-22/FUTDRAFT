@@ -12,12 +12,19 @@ import {
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { usePack } from '../hooks/usePack';
 
-const PackScreen: React.FC = () => {
+interface PackScreenProps {
+  isActive?: boolean;
+}
+
+const PackScreen: React.FC<PackScreenProps> = ({ isActive = true }) => {
   const { pulledPlayers, isOpening, error, userCoins, fetchBalance, openPack, discard } = usePack();
 
+  // Listen to the custom tab router. Every time isActive becomes true, fetch the live balance!
   useEffect(() => {
-    fetchBalance();
-  }, [fetchBalance]);
+    if (isActive) {
+      fetchBalance();
+    }
+  }, [isActive, fetchBalance]);
 
   return (
     <SafeAreaView style={styles.screen}>

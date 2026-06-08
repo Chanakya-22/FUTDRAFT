@@ -155,7 +155,6 @@ export const usePack = (): UsePackResult => {
               }
             }
           } catch (saveError) {
-            // Step C: Fail silently in the background
             console.error('Failed to save players to my_players:', saveError);
           }
         };

@@ -43,7 +43,7 @@ function MainApp() {
           <MatchScreen isActive={currentTab === 'match'} />
         </View>
         <View style={[styles.tabContent, { display: currentTab === 'packs' ? 'flex' : 'none' }]}>
-          <PackScreen />
+          <PackScreen isActive={currentTab === 'packs'} />
         </View>
         <View style={[styles.tabContent, { display: currentTab === 'myclub' ? 'flex' : 'none' }]}>
           <MyPlayersScreen />
