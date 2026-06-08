@@ -57,7 +57,7 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
     coinsEarned,
     matchResult,
   } = useMatchSim(startingXI, bench);
-  const [squadModalOpen, setSquadModalOpen] = useState(false);
+  const [squadView, setSquadView] = useState<'user' | 'cpu' | null>(null);
   const [selectedPitchId, setSelectedPitchId] = useState<number | null>(null);
   const [selectedBenchId, setSelectedBenchId] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
@@ -83,6 +83,12 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
     if (matchPhase === 'penalties') return 'P';
     return `${clock}'`;
   }, [clock, isHalfTime, matchPhase]);
+
+  const squadPlayers = useMemo(() => (squadView === 'user' ? activePitch : cpuTeam), [squadView, activePitch, cpuTeam]);
+  const squadLabel = squadView === 'user' ? 'Your Starting XI' : 'Opponent Starting XI';
+  const squadDescription = squadView === 'user'
+    ? 'Live match lineup only.'
+    : 'Opponent starting eleven only.';
 
   const handleConfirmSub = () => {
     if (selectedPitchId !== null && selectedBenchId !== null) {
@@ -292,13 +298,20 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
 
             <Pressable
               style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
-              onPress={() => setSquadModalOpen(true)}
+              onPress={() => setSquadView('user')}
             >
-              <Text style={styles.actionButtonText}>View Squads</Text>
+              <Text style={styles.actionButtonText}>View My Squad</Text>
+            </Pressable>
+
+            <Pressable
+              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
+              onPress={() => setSquadView('cpu')}
+            >
+              <Text style={styles.actionButtonText}>View Opponent</Text>
             </Pressable>
           </View>
 
-          {(isPaused || matchPhase !== 'live') && (
+          {matchPhase !== 'live' && (
             <Pressable
               style={({ pressed }) => [styles.actionButton, styles.resetButton, pressed && styles.buttonPressed]}
               onPress={resetMatch}
@@ -326,33 +339,15 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
         </View>
       </Modal>
 
-      <Modal visible={squadModalOpen} transparent animationType="slide">
+      <Modal visible={squadView !== null} transparent animationType="slide">
         <View style={styles.modalBackground}>
           <View style={styles.cpuModalContent}>
-            <Text style={styles.modalTitle}>Match Squads</Text>
-            <Text style={styles.modalSubtitle}>Review the live match lineup and opponent squad.</Text>
+            <Text style={styles.modalTitle}>{squadLabel}</Text>
+            <Text style={styles.modalSubtitle}>{squadDescription}</Text>
 
-            <Text style={styles.subSectionTitle}>On Pitch</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ paddingVertical: 8 }}>
-              {activePitch.map((player) => (
-                <View key={`my-pitch-${player.id}`} style={styles.cpuCardWrapper}>
-                  <PlayerCard player={player} selected={false} />
-                </View>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.subSectionTitle}>Substitutes</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ paddingVertical: 8 }}>
-              {activeBench.map((player) => (
-                <View key={`my-bench-${player.id}`} style={styles.cpuCardWrapper}>
-                  <PlayerCard player={player} selected={false} />
-                </View>
-              ))}
-            </ScrollView>
-
-            <Text style={styles.subSectionTitle}>Opponent Squad</Text>
-            <ScrollView style={styles.cpuModalList} contentContainerStyle={{ paddingBottom: 8 }}>
-              {cpuTeam.map((player) => (
+            <Text style={styles.subSectionTitle}>Starting XI</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ paddingVertical: 8, alignItems: 'center' }}>
+              {squadPlayers.map((player) => (
                 <View key={player.id.toString()} style={styles.cpuCardWrapper}>
                   <PlayerCard player={player} selected={false} />
                 </View>
@@ -361,7 +356,7 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
 
             <Pressable
               style={({ pressed }) => [styles.confirmButton, pressed && styles.buttonPressed]}
-              onPress={() => setSquadModalOpen(false)}
+              onPress={() => setSquadView(null)}
             >
               <Text style={styles.confirmButtonText}>Close</Text>
             </Pressable>
@@ -376,7 +371,7 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
             <Text style={styles.modalSubtitle}>Select a pitch player and a bench player to swap.</Text>
 
             <Text style={styles.subSectionTitle}>On Pitch</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ alignItems: 'center' }}>
               {activePitch.map((player) => (
                 <Pressable
                   key={player.id.toString()}
@@ -393,7 +388,7 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
             </ScrollView>
 
             <Text style={styles.subSectionTitle}>Bench</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ alignItems: 'center' }}>
               {activeBench.map((player) => (
                 <Pressable
                   key={player.id.toString()}
@@ -567,7 +562,6 @@ const styles = StyleSheet.create({
   },
   cardRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     marginBottom: 12,
   },
   cpuModalContent: {

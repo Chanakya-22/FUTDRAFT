@@ -99,14 +99,20 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   const oppNameRef = useRef<string>('Opponent');
   const hasRewarded = useRef(false);
 
+  useEffect(() => {
+    if (activePitch.length === 0 && startingXI.length > 0) {
+      setActivePitch([...startingXI]);
+    }
+    if (activeBench.length === 0 && bench.length > 0) {
+      setActiveBench([...bench]);
+    }
+  }, [startingXI, bench, activePitch.length, activeBench.length]);
+
   const fetchCpuTeam = useCallback(async () => {
     setCpuLoading(true);
-    const { data, error } = await supabase
-      .from('players')
-      .select('*')
-      .gte('rating', 80)
-      .order('rating', { ascending: false })
-      .limit(200);
+    const userOVR = Math.max(65, Math.min(90, calculateTeamOVR(startingXI) || 76));
+
+    const { data, error } = await supabase.from('players').select('*').limit(200);
 
     if (error || !data) {
       setEvents((existing) => [
@@ -119,17 +125,20 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     }
 
     const shuffled = shufflePlayers(data);
-    const selected = shuffled.slice(0, 11);
+    const targetMin = Math.max(65, userOVR - 4);
+    const targetMax = Math.min(88, userOVR + 4);
+    const filtered = shuffled.filter((player) => {
+      const rating = typeof player.rating === 'number' ? player.rating : Number(player.rating) || 0;
+      return rating >= targetMin && rating <= targetMax;
+    });
+
+    const selected = filtered.length >= 11 ? shufflePlayers(filtered).slice(0, 11) : shuffled.slice(0, 11);
     setCpuTeam(selected);
 
-    // Generate a premium European Club opponent profile
     const oppProfile = generateOpponent();
-
     oppNameRef.current = oppProfile.name || 'Opponent';
 
-    // Initialize the live ticker
     setEvents([`Kickoff! Match against ${oppProfile.name} begins.`]);
-
     setCpuLoading(false);
     setIsPaused(false);
   }, [startingXI]);
