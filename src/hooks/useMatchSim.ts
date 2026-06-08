@@ -3,6 +3,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Player } from '../types';
 import { calculateTeamOVR, MatchStats, generateOpponent, evaluateLiveMinute } from '../engine/MatchMath';
 import { supabase } from '../api/supabaseClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type Mentality = 'attack' | 'balanced' | 'defense';
 
@@ -209,18 +210,13 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
         ]);
 
         try {
-          const { data: currentBalance } = await supabase
-            .from('user_balances')
-            .select('coins')
-            .eq('user_id', user.id)
-            .single();
+          // Instead of querying and updating, we simply call the server-side function
+          const { error: rpcError } = await supabase
+            .rpc('add_match_coins', { amount: finalCoins });
+
+          if (rpcError) throw rpcError;
           
-          if (currentBalance) {
-            await supabase
-              .from('user_balances')
-              .update({ coins: currentBalance.coins + finalCoins })
-              .eq('user_id', user.id);
-          }
+          console.log('Coins successfully deposited via RPC!');
         } catch (err) {
           console.error('Failed to reward coins:', err);
         }
@@ -324,6 +320,18 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
   }, [activePitch, cpuLoading, cpuTeam, isPaused, matchPhase, mentality, yellowCards, score]);
+
+  useEffect(() => {
+    const saveProgress = async () => {
+      try {
+        const gameState = { clock, score, matchPhase };
+        await AsyncStorage.setItem('match_save', JSON.stringify(gameState));
+      } catch (err) {
+        console.error('Failed to save match progress', err);
+      }
+    };
+    saveProgress();
+  }, [clock, score, matchPhase]);
 
   const performSub = useCallback(
     (pitchPlayerId: number, benchPlayerId: number) => {
