@@ -107,7 +107,7 @@ const DraftScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>MADFUT Draft</Text>
+        <Text style={styles.title}>DRAFT XI</Text>
         <Text style={styles.subtitle}>{secondaryText}</Text>
       </View>
 

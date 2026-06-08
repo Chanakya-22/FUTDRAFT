@@ -10,13 +10,14 @@ import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 import MyPlayersScreen from './src/screens/MyPlayersScreen';
 import MySquadScreen from './src/screens/MySquadScreen';
+import { LandingScreen } from './src/screens/LandingScreen';
 
 const DraftScreenWithNav = DraftScreen as React.ComponentType<{ navigateToMatch: () => void }>;
 
 function MainApp() {
   const { session, loading } = useAuth();
   const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs' | 'myclub' | 'mysquad'>('draft');
-  const [isLoginView, setIsLoginView] = useState(true);
+  const [authMode, setAuthMode] = useState<'landing' | 'login' | 'signup'>('landing');
 
   if (loading) {
     return (
@@ -27,11 +28,15 @@ function MainApp() {
   }
 
   if (!session) {
-    return isLoginView ? (
-      <LoginScreen onNavigateToSignup={() => setIsLoginView(false)} />
-    ) : (
-      <SignupScreen onNavigateToLogin={() => setIsLoginView(true)} />
-    );
+    if (authMode === 'landing') {
+      return <LandingScreen onNavigateToAuth={(mode) => setAuthMode(mode)} />;
+    }
+    if (authMode === 'login') {
+      return <LoginScreen onNavigateToSignup={() => setAuthMode('signup')} />;
+    }
+    if (authMode === 'signup') {
+      return <SignupScreen onNavigateToLogin={() => setAuthMode('login')} />;
+    }
   }
 
   return (
@@ -93,7 +98,6 @@ function MainApp() {
     </SquadProvider>
   );
 }
-
 
 export default function App() {
   return (
