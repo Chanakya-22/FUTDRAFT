@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, useContext } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import { Player } from '../types';
-import { calculateTeamOVR, MatchStats, simulateMatch, generateOpponent } from '../engine/MatchMath';
+import { calculateTeamOVR, MatchStats, generateOpponent, evaluateLiveMinute } from '../engine/MatchMath';
 import { supabase } from '../api/supabaseClient';
 
 export type Mentality = 'attack' | 'balanced' | 'defense';
@@ -74,6 +74,7 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   const [matchPhase, setMatchPhase] = useState<MatchPhase>('live');
   const [activePitch, setActivePitch] = useState<Player[]>(() => [...startingXI]);
   const [activeBench, setActiveBench] = useState<Player[]>(() => [...bench]);
+  const [yellowCards, setYellowCards] = useState<Record<number, number>>({});
   const [cpuTeam, setCpuTeam] = useState<Player[]>([]);
   const [cpuLoading, setCpuLoading] = useState(true);
   const [subsRemaining, setSubsRemaining] = useState(MAX_SUBS);
@@ -95,6 +96,7 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
   // Platform agnostic reference for React Native timers
   const intervalRef = useRef<any>(null);
   const preSimRef = useRef<any>(null);
+  const oppNameRef = useRef<string>('Opponent');
   const hasRewarded = useRef(false);
 
   const fetchCpuTeam = useCallback(async () => {
@@ -123,27 +125,10 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     // Generate a premium European Club opponent profile
     const oppProfile = generateOpponent();
 
-    // Compile Match statistics for the Simulation Engine
-    const userStats: MatchStats = {
-      ovr: calculateTeamOVR(startingXI),
-      chemistry: 100,
-    };
-    const cpuStats: MatchStats = {
-      ovr: calculateTeamOVR(selected),
-      chemistry: oppProfile.chemistry,
-      name: oppProfile.name,
-    };
+    oppNameRef.current = oppProfile.name || 'Opponent';
 
-    // Pre-simulate the match timeline
-    const preSim = simulateMatch(userStats, cpuStats);
-    preSimRef.current = preSim;
-
-    // Initialize the ticker display with the kickoff message
-    if (preSim.events.length > 0) {
-      setEvents([preSim.events[0]]);
-    } else {
-      setEvents([`Kickoff! Match against ${oppProfile.name} begins.`]);
-    }
+    // Initialize the live ticker
+    setEvents([`Kickoff! Match against ${oppProfile.name} begins.`]);
 
     setCpuLoading(false);
     setIsPaused(false);
@@ -249,9 +234,7 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
 
     intervalRef.current = setInterval(() => {
       setClock((currentClock) => {
-        if (currentClock >= MATCH_LENGTH) {
-          return currentClock;
-        }
+        if (currentClock >= MATCH_LENGTH) return currentClock;
 
         const nextClock = currentClock + 1;
 
@@ -264,8 +247,7 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
 
         if (nextClock >= MATCH_LENGTH) {
           setIsPaused(true);
-          // Check if normal time demands sudden death shootouts
-          if (preSimRef.current?.userScore === preSimRef.current?.oppScore) {
+          if (score.user === score.cpu) {
             setMatchPhase('penalties');
             setPenaltyTurn('user_shoot');
             setPenaltyRound(1);
@@ -277,23 +259,52 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
           return nextClock;
         }
 
-        // Parse and playback pre-simulated timeline events matching the current minute
-        if (preSimRef.current) {
-          const minutePrefix = `${nextClock}'`;
-          const currentMinEvents = preSimRef.current.events.filter((e: string) => e.startsWith(minutePrefix));
-          
-          if (currentMinEvents.length > 0) {
-            currentMinEvents.forEach((eventText: string) => {
-              setEvents((existing) => [...existing, eventText]);
+        const event = evaluateLiveMinute(
+          calculateTeamOVR(activePitch),
+          calculateTeamOVR(cpuTeam),
+          activePitch,
+          cpuTeam,
+          mentality,
+          oppNameRef.current,
+          nextClock,
+          score.user - score.cpu,
+        );
 
-              // Synchronize interactive score state variables dynamically
-              if (eventText.includes('⚽ GOAL for You!')) {
-                setScore((prev) => ({ ...prev, user: prev.user + 1 }));
-              } else if (eventText.includes('🔴 GOAL for')) {
-                setScore((prev) => ({ ...prev, cpu: prev.cpu + 1 }));
-              }
-            });
+        if (event.type === 'goal') {
+          setScore((s) => ({
+            user: event.team === 'user' ? s.user + 1 : s.user,
+            cpu: event.team === 'cpu' ? s.cpu + 1 : s.cpu,
+          }));
+          setEvents((existing) => [...existing, `${nextClock}' - ${event.text}`]);
+        } else if (event.type === 'yellow') {
+          const currentYellows = (yellowCards[event.playerId!] || 0) + 1;
+
+          if (currentYellows >= 2) {
+            setEvents((existing) => [
+              ...existing,
+              `${nextClock}' - 🟥 RED CARD! ${event.playerName} is sent off!`,
+            ]);
+
+            if (event.team === 'user') {
+              setActivePitch((players) =>
+                players.filter((player) => player.id !== event.playerId),
+              );
+            }
+
+            if (event.team === 'cpu') {
+              setCpuTeam((players) =>
+                players.filter((player) => player.id !== event.playerId),
+              );
+            }
+          } else {
+            setYellowCards((cards) => ({
+              ...cards,
+              [event.playerId!]: currentYellows,
+            }));
+            setEvents((existing) => [...existing, `${nextClock}' - ${event.text}`]);
           }
+        } else if (event.type !== 'none') {
+          setEvents((existing) => [...existing, `${nextClock}' - ${event.text}`]);
         }
 
         return nextClock;
@@ -301,11 +312,9 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     }, TICK_MS);
 
     return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [activePitch, cpuLoading, cpuTeam, isPaused, matchPhase, mentality, score]);
+  }, [activePitch, cpuLoading, cpuTeam, isPaused, matchPhase, mentality, yellowCards, score]);
 
   const performSub = useCallback(
     (pitchPlayerId: number, benchPlayerId: number) => {

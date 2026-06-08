@@ -57,13 +57,12 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
     coinsEarned,
     matchResult,
   } = useMatchSim(startingXI, bench);
-  const [cpuModalOpen, setCpuModalOpen] = useState(false);
-  const [myModalOpen, setMyModalOpen] = useState(false);
+  const [squadModalOpen, setSquadModalOpen] = useState(false);
   const [selectedPitchId, setSelectedPitchId] = useState<number | null>(null);
   const [selectedBenchId, setSelectedBenchId] = useState<number | null>(null);
   const scrollRef = useRef<ScrollView | null>(null);
 
-  const userOVR = useMemo(() => calculateTeamOVR(startingXI), [startingXI]);
+  const userOVR = useMemo(() => calculateTeamOVR(activePitch), [activePitch]);
   const cpuOVR = useMemo(() => calculateTeamOVR(cpuTeam), [cpuTeam]);
 
   useEffect(() => {
@@ -99,11 +98,6 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
     resetMatch();
     if (clearSquad) clearSquad();
   };
-
-  const openCpuModal = () => setCpuModalOpen(true);
-  const closeCpuModal = () => setCpuModalOpen(false);
-  const openMyModal = () => setMyModalOpen(true);
-  const closeMyModal = () => setMyModalOpen(false);
 
   if (startingXI.length === 0) {
     return (
@@ -286,7 +280,11 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
                 subsRemaining <= 0 && styles.buttonDisabled,
                 pressed && styles.buttonPressed,
               ]}
-              onPress={openSubModal}
+              onPress={() => {
+                setSelectedPitchId(null);
+                setSelectedBenchId(null);
+                openSubModal();
+              }}
               disabled={subsRemaining <= 0 || matchPhase !== 'live'}
             >
               <Text style={styles.actionButtonText}>Sub ({subsRemaining})</Text>
@@ -294,16 +292,9 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
 
             <Pressable
               style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
-              onPress={openCpuModal}
+              onPress={() => setSquadModalOpen(true)}
             >
-              <Text style={styles.actionButtonText}>View CPU Squad</Text>
-            </Pressable>
-
-            <Pressable
-              style={({ pressed }) => [styles.actionButton, pressed && styles.buttonPressed]}
-              onPress={openMyModal}
-            >
-              <Text style={styles.actionButtonText}>View My Squad</Text>
+              <Text style={styles.actionButtonText}>View Squads</Text>
             </Pressable>
           </View>
 
@@ -335,48 +326,42 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
         </View>
       </Modal>
 
-      <Modal visible={cpuModalOpen} transparent animationType="slide">
+      <Modal visible={squadModalOpen} transparent animationType="slide">
         <View style={styles.modalBackground}>
           <View style={styles.cpuModalContent}>
-            <Text style={styles.modalTitle}>CPU Squad</Text>
-            <Text style={styles.modalSubtitle}>Generated opponent squad with a {cpuOVR} OVR average.</Text>
-            <ScrollView style={styles.cpuModalList} contentContainerStyle={{ paddingBottom: 16 }}>
+            <Text style={styles.modalTitle}>Match Squads</Text>
+            <Text style={styles.modalSubtitle}>Review the live match lineup and opponent squad.</Text>
+
+            <Text style={styles.subSectionTitle}>On Pitch</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ paddingVertical: 8 }}>
+              {activePitch.map((player) => (
+                <View key={`my-pitch-${player.id}`} style={styles.cpuCardWrapper}>
+                  <PlayerCard player={player} selected={false} />
+                </View>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.subSectionTitle}>Substitutes</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ paddingVertical: 8 }}>
+              {activeBench.map((player) => (
+                <View key={`my-bench-${player.id}`} style={styles.cpuCardWrapper}>
+                  <PlayerCard player={player} selected={false} />
+                </View>
+              ))}
+            </ScrollView>
+
+            <Text style={styles.subSectionTitle}>Opponent Squad</Text>
+            <ScrollView style={styles.cpuModalList} contentContainerStyle={{ paddingBottom: 8 }}>
               {cpuTeam.map((player) => (
                 <View key={player.id.toString()} style={styles.cpuCardWrapper}>
                   <PlayerCard player={player} selected={false} />
                 </View>
               ))}
             </ScrollView>
-            <Pressable
-              style={({ pressed }) => [styles.confirmButton, pressed && styles.buttonPressed]}
-              onPress={closeCpuModal}
-            >
-              <Text style={styles.confirmButtonText}>Close</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
-      <Modal visible={myModalOpen} transparent animationType="slide">
-        <View style={styles.modalBackground}>
-          <View style={styles.cpuModalContent}>
-            <Text style={styles.modalTitle}>My Squad</Text>
-            <Text style={styles.modalSubtitle}>Starting XI and bench players from your drafted squad.</Text>
-            <ScrollView style={styles.cpuModalList} contentContainerStyle={{ paddingBottom: 16 }}>
-              {startingXI.map((player) => (
-                <View key={`my-${player.id}`} style={styles.cpuCardWrapper}>
-                  <PlayerCard player={player} selected={false} />
-                </View>
-              ))}
-              {bench.map((player) => (
-                <View key={`bench-${player.id}`} style={styles.cpuCardWrapper}>
-                  <PlayerCard player={player} selected={false} />
-                </View>
-              ))}
-            </ScrollView>
             <Pressable
               style={({ pressed }) => [styles.confirmButton, pressed && styles.buttonPressed]}
-              onPress={closeMyModal}
+              onPress={() => setSquadModalOpen(false)}
             >
               <Text style={styles.confirmButtonText}>Close</Text>
             </Pressable>
@@ -427,7 +412,11 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
             <View style={styles.modalButtonRow}>
               <Pressable
                 style={({ pressed }) => [styles.cancelButton, pressed && styles.buttonPressed]}
-                onPress={closeSubModal}
+                onPress={() => {
+                  setSelectedPitchId(null);
+                  setSelectedBenchId(null);
+                  closeSubModal();
+                }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
               </Pressable>
@@ -538,11 +527,11 @@ const styles = StyleSheet.create({
   mentalityRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    gap: 8,
     marginBottom: 12,
   },
   mentalityButton: {
     flex: 1,
+    marginHorizontal: 4,
     backgroundColor: '#1a1a1a',
     borderRadius: 10,
     paddingVertical: 10,
@@ -561,17 +550,43 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    gap: 8,
+    marginBottom: 8,
   },
   actionButton: {
     flex: 1,
+    minWidth: 110,
+    marginBottom: 10,
     backgroundColor: '#1f8cff',
     borderRadius: 10,
-    paddingVertical: 12,
+    paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: '#1f8cff',
+  },
+  cardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cpuModalContent: {
+    backgroundColor: '#0f0f0f',
+    borderRadius: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: '#1f1f1f',
+    maxHeight: '85%',
+  },
+  cpuModalList: {
+    maxHeight: 230,
+    marginBottom: 16,
+  },
+  modalBackground: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'flex-end',
+    padding: 16,
   },
   actionButtonText: {
     color: '#ffffff',
@@ -748,12 +763,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: 'center',
   },
-  modalBackground: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.85)',
-    justifyContent: 'center',
-    padding: 16,
-  },
   modalContent: {
     backgroundColor: '#0f0f0f',
     borderRadius: 16,
@@ -777,9 +786,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     marginVertical: 10,
-  },
-  cardRow: {
-    marginBottom: 12,
   },
   swapCard: {
     marginRight: 10,
@@ -836,18 +842,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: '#262626',
-  },
-  cpuModalContent: {
-    backgroundColor: '#0f0f0f',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#1f1f1f',
-    maxHeight: '80%',
-  },
-  cpuModalList: {
-    maxHeight: 360,
-    marginBottom: 16,
   },
   cpuCardWrapper: {
     marginBottom: 10,
