@@ -321,17 +321,38 @@ export const useMatchSim = (startingXI: Player[], bench: Player[]): UseMatchSimR
     };
   }, [activePitch, cpuLoading, cpuTeam, isPaused, matchPhase, mentality, yellowCards, score]);
 
+  // --- UPDATED DEEP PERSISTENCE ENGINE ---
   useEffect(() => {
     const saveProgress = async () => {
+      if (clock === 0 || matchPhase === 'fulltime') return;
       try {
-        const gameState = { clock, score, matchPhase };
+        const gameState = { 
+          clock, 
+          score, 
+          matchPhase,
+          mentality,
+          subsRemaining,
+          events,
+          yellowCards,
+          activePitch,
+          activeBench
+        };
         await AsyncStorage.setItem('match_save', JSON.stringify(gameState));
       } catch (err) {
         console.error('Failed to save match progress', err);
       }
     };
     saveProgress();
-  }, [clock, score, matchPhase]);
+  }, [clock, score, matchPhase, mentality, subsRemaining, events, yellowCards, activePitch, activeBench]);
+
+  // --- CLEANUP LOCAL STORAGE CACHE UPON CONCLUSION ---
+  useEffect(() => {
+    if (matchPhase === 'fulltime' || clock === 0) {
+      AsyncStorage.removeItem('match_save').catch((err) =>
+        console.error('Failed to clear match save', err)
+      );
+    }
+  }, [matchPhase, clock]);
 
   const performSub = useCallback(
     (pitchPlayerId: number, benchPlayerId: number) => {
