@@ -1,151 +1,140 @@
-import React, { useState } from 'react';
-import { SafeAreaView, StyleSheet, View, Pressable, Text, ActivityIndicator } from 'react-native';
-import DraftScreen from './src/screens/DraftScreen';
-import MatchScreen from './src/screens/MatchScreen';
-import PackScreen from './src/screens/PackScreen';
+import React from 'react';
+import { ActivityIndicator, StyleSheet, View, StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+
+// Contexts & Boundaries
 import { SquadProvider } from './src/context/SquadContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
+
+// Screens
+import { LandingScreen } from './src/screens/LandingScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+import DraftScreen from './src/screens/DraftScreen';
+import MatchScreen from './src/screens/MatchScreen';
+import PackScreen from './src/screens/PackScreen';
 import MyPlayersScreen from './src/screens/MyPlayersScreen';
 import MySquadScreen from './src/screens/MySquadScreen';
-import { LandingScreen } from './src/screens/LandingScreen';
 
-const DraftScreenWithNav = DraftScreen as React.ComponentType<{ navigateToMatch: () => void }>;
+const Stack = createNativeStackNavigator();
+const Tab = createBottomTabNavigator();
 
-function MainApp() {
+// TypeScript bypasses for screens that require custom props
+const DraftScreenWithNav = DraftScreen as React.ComponentType<any>;
+const LoginScreenWithNav = LoginScreen as React.ComponentType<any>;
+const SignupScreenWithNav = SignupScreen as React.ComponentType<any>;
+
+// --- 1. THE MAIN GAME TABS ---
+function MainTabNavigator() {
+  return (
+    <SquadProvider>
+      <Tab.Navigator
+        screenOptions={{
+          headerShown: false,
+          tabBarStyle: styles.tempTabBar,
+          tabBarActiveTintColor: '#fff',
+          tabBarInactiveTintColor: '#888',
+        }}
+      >
+        <Tab.Screen name="Draft">
+          {(props) => (
+            <DraftScreenWithNav 
+              {...props} 
+              navigateToMatch={() => props.navigation.navigate('Match')} 
+            />
+          )}
+        </Tab.Screen>
+        <Tab.Screen name="Match" component={MatchScreen} />
+        <Tab.Screen name="Packs" component={PackScreen} />
+        <Tab.Screen name="MyClub" component={MyPlayersScreen} options={{ title: 'My Club' }} />
+        <Tab.Screen name="MySquad" component={MySquadScreen} options={{ title: 'My Squad' }} />
+      </Tab.Navigator>
+    </SquadProvider>
+  );
+}
+
+// --- 2. THE ROOT ROUTER (Auth vs Game) ---
+function RootNavigator() {
   const { session, loading } = useAuth();
-  const [currentTab, setCurrentTab] = useState<'draft' | 'match' | 'packs' | 'myclub' | 'mysquad'>('draft');
-  const [authMode, setAuthMode] = useState<'landing' | 'login' | 'signup'>('landing');
 
   if (loading) {
     return (
-      <SafeAreaView style={[styles.container, styles.centerContent]}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#1f8cff" />
-      </SafeAreaView>
+      </View>
     );
   }
 
-  if (!session) {
-    if (authMode === 'landing') {
-      return <LandingScreen onNavigateToAuth={(mode) => setAuthMode(mode)} />;
-    }
-    if (authMode === 'login') {
-      return <LoginScreen onNavigateToSignup={() => setAuthMode('signup')} />;
-    }
-    if (authMode === 'signup') {
-      return <SignupScreen onNavigateToLogin={() => setAuthMode('login')} />;
-    }
-  }
-
   return (
-    <SquadProvider>
-      <SafeAreaView style={styles.container}>
-        <View style={[styles.tabContent, { display: currentTab === 'draft' ? 'flex' : 'none' }]}>
-          <DraftScreenWithNav navigateToMatch={() => setCurrentTab('match')} />
-        </View>
-        <View style={[styles.tabContent, { display: currentTab === 'match' ? 'flex' : 'none' }]}>
-          <MatchScreen isActive={currentTab === 'match'} />
-        </View>
-        <View style={[styles.tabContent, { display: currentTab === 'packs' ? 'flex' : 'none' }]}>
-          <PackScreen isActive={currentTab === 'packs'} />
-        </View>
-        <View style={[styles.tabContent, { display: currentTab === 'myclub' ? 'flex' : 'none' }]}>
-          <MyPlayersScreen />
-        </View>
-        <View style={[styles.tabContent, { display: currentTab === 'mysquad' ? 'flex' : 'none' }]}>
-          <MySquadScreen />
-        </View>
-
-        <View style={styles.tabBar}>
-          <Pressable
-            style={({ pressed }) => [styles.tabButton, currentTab === 'draft' && styles.tabActive, pressed && styles.tabPressed]}
-            onPress={() => setCurrentTab('draft')}
-          >
-            <Text style={[styles.tabText, currentTab === 'draft' && styles.tabTextActive]}>Draft</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.tabButton, currentTab === 'match' && styles.tabActive, pressed && styles.tabPressed]}
-            onPress={() => setCurrentTab('match')}
-          >
-            <Text style={[styles.tabText, currentTab === 'match' && styles.tabTextActive]}>Match</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.tabButton, currentTab === 'packs' && styles.tabActive, pressed && styles.tabPressed]}
-            onPress={() => setCurrentTab('packs')}
-          >
-            <Text style={[styles.tabText, currentTab === 'packs' && styles.tabTextActive]}>Packs</Text>
-          </Pressable>
-          
-          <Pressable
-            style={({ pressed }) => [styles.tabButton, currentTab === 'myclub' && styles.tabActive, pressed && styles.tabPressed]}
-            onPress={() => setCurrentTab('myclub')}
-          >
-            <Text style={[styles.tabText, currentTab === 'myclub' && styles.tabTextActive]}>My Club</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [styles.tabButton, currentTab === 'mysquad' && styles.tabActive, pressed && styles.tabPressed]}
-            onPress={() => setCurrentTab('mysquad')}
-          >
-            <Text style={[styles.tabText, currentTab === 'mysquad' && styles.tabTextActive]}>My Squad</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </SquadProvider>
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {!session ? (
+        // User is NOT logged in -> Show Landing/Auth Flow
+        <>
+          <Stack.Screen name="Landing">
+            {(props) => (
+              <LandingScreen 
+                onNavigateToAuth={(mode) => 
+                  props.navigation.navigate(mode === 'login' ? 'Login' : 'Signup')
+                } 
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Login">
+            {(props) => (
+              <LoginScreenWithNav 
+                {...props} 
+                onNavigateToSignup={() => props.navigation.navigate('Signup')} 
+              />
+            )}
+          </Stack.Screen>
+          <Stack.Screen name="Signup">
+            {(props) => (
+              <SignupScreenWithNav 
+                {...props} 
+                onNavigateToLogin={() => props.navigation.navigate('Login')} 
+              />
+            )}
+          </Stack.Screen>
+        </>
+      ) : (
+        // User IS logged in -> Show Main Game
+        <Stack.Screen name="MainApp" component={MainTabNavigator} />
+      )}
+    </Stack.Navigator>
   );
 }
 
 export default function App() {
   return (
-    <AuthProvider>
-      <ErrorBoundary>
-        <MainApp />
-      </ErrorBoundary>
-    </AuthProvider>
+    <SafeAreaProvider>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
+      <AuthProvider>
+        <ErrorBoundary>
+          <NavigationContainer>
+            <RootNavigator />
+          </NavigationContainer>
+        </ErrorBoundary>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  loadingContainer: {
     flex: 1,
     backgroundColor: '#0d0d0d',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#1a1a1a',
-    backgroundColor: '#070707',
-  },
-  tabButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-  },
-  tabActive: {
-    backgroundColor: '#151515',
-  },
-  tabPressed: {
-    opacity: 0.8,
-  },
-  tabText: {
-    color: '#888',
-    fontWeight: '700',
-  },
-  tabTextActive: {
-    color: '#fff',
-  },
-  centerContent: {
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tabContent: {
-    flex: 1,
-  },
+  tempTabBar: {
+    backgroundColor: '#070707',
+    borderTopWidth: 1,
+    borderTopColor: '#1a1a1a',
+    paddingBottom: 5,
+    paddingTop: 5,
+  }
 });
