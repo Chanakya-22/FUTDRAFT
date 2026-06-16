@@ -1,9 +1,10 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { BlurView } from 'expo-blur';
 
 // Contexts & Boundaries
 import { SquadProvider } from './src/context/SquadContext';
@@ -23,21 +24,42 @@ import MySquadScreen from './src/screens/MySquadScreen';
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
-// TypeScript bypasses for screens that require custom props
+// TypeScript bypasses
 const DraftScreenWithNav = DraftScreen as React.ComponentType<any>;
 const LoginScreenWithNav = LoginScreen as React.ComponentType<any>;
 const SignupScreenWithNav = SignupScreen as React.ComponentType<any>;
 
-// --- 1. THE MAIN GAME TABS ---
+// --- 1. THE PREMIUM MAIN GAME TABS ---
 function MainTabNavigator() {
   return (
     <SquadProvider>
       <Tab.Navigator
         screenOptions={{
           headerShown: false,
-          tabBarStyle: styles.tempTabBar,
-          tabBarActiveTintColor: '#fff',
-          tabBarInactiveTintColor: '#888',
+          // 1. Make the tab bar float above the content
+          tabBarStyle: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            elevation: 0,
+            backgroundColor: 'transparent',
+            borderTopWidth: 1,
+            borderTopColor: 'rgba(255, 255, 255, 0.08)',
+            height: 85,
+            paddingBottom: 20, // Lift icons slightly for modern phones
+          },
+          // 2. Insert the Frosted Glass behind the icons
+          tabBarBackground: () => (
+            <BlurView tint="dark" intensity={85} style={StyleSheet.absoluteFill} />
+          ),
+          // 3. Premium Color Palette
+          tabBarActiveTintColor: '#1f8cff', // Electric Blue
+          tabBarInactiveTintColor: '#8A99AD', // Slate Grey
+          tabBarLabelStyle: {
+            fontWeight: '700',
+            fontSize: 11,
+          }
         }}
       >
         <Tab.Screen name="Draft">
@@ -57,7 +79,7 @@ function MainTabNavigator() {
   );
 }
 
-// --- 2. THE ROOT ROUTER (Auth vs Game) ---
+// --- 2. THE ROOT ROUTER ---
 function RootNavigator() {
   const { session, loading } = useAuth();
 
@@ -72,7 +94,6 @@ function RootNavigator() {
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {!session ? (
-        // User is NOT logged in -> Show Landing/Auth Flow
         <>
           <Stack.Screen name="Landing">
             {(props) => (
@@ -101,12 +122,20 @@ function RootNavigator() {
           </Stack.Screen>
         </>
       ) : (
-        // User IS logged in -> Show Main Game
         <Stack.Screen name="MainApp" component={MainTabNavigator} />
       )}
     </Stack.Navigator>
   );
 }
+
+// Apply a globally dark theme to React Navigation so screen transitions are black, not white.
+const DarkTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: '#040609', // Deepest background black
+  },
+};
 
 export default function App() {
   return (
@@ -114,7 +143,7 @@ export default function App() {
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       <AuthProvider>
         <ErrorBoundary>
-          <NavigationContainer>
+          <NavigationContainer theme={DarkTheme}>
             <RootNavigator />
           </NavigationContainer>
         </ErrorBoundary>
@@ -126,15 +155,8 @@ export default function App() {
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: '#040609',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  tempTabBar: {
-    backgroundColor: '#070707',
-    borderTopWidth: 1,
-    borderTopColor: '#1a1a1a',
-    paddingBottom: 5,
-    paddingTop: 5,
-  }
 });
