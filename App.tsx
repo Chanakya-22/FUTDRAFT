@@ -1,3 +1,4 @@
+import 'react-native-url-polyfill/auto';
 import React from 'react';
 import { ActivityIndicator, StyleSheet, View, StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
