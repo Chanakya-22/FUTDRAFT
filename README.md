@@ -2,6 +2,14 @@
 
 A football team-building and simulation platform inspired by modern Ultimate Team systems that combines intelligent draft generation, player-card mechanics, squad chemistry, match simulation engines, progression systems, and competitive gameplay into a mobile-first experience.
 
+## Android Installation (Preview)
+
+To test the current pre-release version of the application on an Android device or emulator:
+
+1. Navigate to the latest release section of this repository.
+2. Download the `FUTDRAFT.apk` file.
+3. If installing on a physical device, permit installation from unknown sources in your Android security settings when prompted.
+
 ---
 
 ## Table of Contents
