@@ -7,10 +7,12 @@
     "@supabase/supabase-js": "^2.106.2",
     "expo": "^56.0.5",
     "expo-blur": "~56.0.3",
+    "expo-image": "~56.0.11",
     "expo-linear-gradient": "~56.0.4",
     "react": "^19.2.3",
     "react-native-safe-area-context": "~5.7.0",
-    "react-native-screens": "4.25.2"
+    "react-native-screens": "4.25.2",
+    "react-native-url-polyfill": "^3.0.0"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
