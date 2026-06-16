@@ -372,9 +372,9 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
 
             <Text style={styles.subSectionTitle}>On Pitch</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ alignItems: 'center' }}>
-              {activePitch.map((player) => (
+              {activePitch.map((player, index) => (
                 <Pressable
-                  key={player.id.toString()}
+                  key={`pitch-${index}-${player.id}`}
                   onPress={() => setSelectedPitchId((current) => (current === player.id ? null : player.id))}
                   style={({ pressed }) => [
                     styles.swapCard,
@@ -389,9 +389,9 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
 
             <Text style={styles.subSectionTitle}>Bench</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cardRow} contentContainerStyle={{ alignItems: 'center' }}>
-              {activeBench.map((player) => (
+              {activeBench.map((player, index) => (
                 <Pressable
-                  key={player.id.toString()}
+                  key={`bench-${index}-${player.id}`}
                   onPress={() => setSelectedBenchId((current) => (current === player.id ? null : player.id))}
                   style={({ pressed }) => [
                     styles.swapCard,

@@ -121,6 +121,11 @@ const styles = StyleSheet.create({
     marginRight: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarPlaceholder: {
     width: 60,
