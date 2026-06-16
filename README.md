@@ -667,6 +667,32 @@ FUTDRAFT/
 ```
 
 ---
+The "Elevator Pitch"
+"FUTDRAFT is a cross-platform mobile sports simulation application. The frontend is built using React Native and TypeScript, orchestrated by the Expo framework. For the backend architecture, I utilized Supabase (PostgreSQL) as a Backend-as-a-Service to handle real-time authentication, user states, and secure transactions. The app was compiled and distributed using Expo Application Services (EAS) for cloud-based CI/CD."
+
+The Detailed Implementation (How you built it)
+1. Frontend & State Management (The Client)
+
+Tech: React Native, Expo, TypeScript, React Navigation.
+
+Implementation: "I designed a premium, dark-mode 'glassmorphic' UI using custom LinearGradient layouts and expo-blur for native visual fidelity. Because the app requires complex game states (like managing active squads, opening packs, and simulating matches), I utilized React's Context API coupled with custom hooks (usePack, useMatchSim) to separate the game engine logic from the UI components. For performance, I implemented expo-image to heavily cache player assets and prevent network-heavy re-renders."
+
+2. Backend Architecture (The Server)
+
+Tech: Supabase (PostgreSQL), GoTrue Auth.
+
+Implementation: "I moved away from local storage and implemented a cloud-first database. I used Supabase Auth, integrating it with React Native's AsyncStorage to ensure secure, persistent user sessions. To prevent client-side cheating (like users giving themselves infinite coins), the database handles economic transactions. I even wrote custom SQL Database Triggers—for example, automatically generating a starter wallet row in the user_balances table the millisecond a new user registers."
+
+3. Local Testing & Development
+
+Implementation: "During development, I leveraged the Expo Go client and the Android Studio Emulator. This allowed me to use Hot Module Replacement (fast refresh) to instantly see UI changes across different simulated devices without waiting for native compilations."
+
+4. Building & Deployment (Production)
+
+Tech: EAS (Expo Application Services), GitHub Releases.
+
+Implementation: "To prepare for production, I injected my environment variables (like Supabase keys) securely into Expo's cloud vault using EAS Secrets. Instead of dealing with the massive overhead of local Android Studio Gradle builds, I utilized EAS Cloud Compilation. I triggered automated cloud builds via the EAS CLI to generate a signed, production-ready .apk binary. Finally, I established version control and distribution by hosting the binary via GitHub Releases for public beta testing."
+
 
 # Versioning
 
