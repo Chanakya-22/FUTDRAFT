@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,6 +10,7 @@ import {
 } from 'react-native';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { usePack } from '../hooks/usePack';
+import { GameLayout } from '../components/Layout/GameLayout';
 
 interface PackScreenProps {
   isActive?: boolean;
@@ -27,7 +27,7 @@ const PackScreen: React.FC<PackScreenProps> = ({ isActive = true }) => {
   }, [isActive, fetchBalance]);
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <GameLayout>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>STOREFRONT</Text>
@@ -107,7 +107,7 @@ const PackScreen: React.FC<PackScreenProps> = ({ isActive = true }) => {
           </Pressable>
         </View>
       )}
-    </SafeAreaView>
+    </GameLayout>
   );
 };
 
@@ -116,7 +116,6 @@ export default PackScreen;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0d0d0d',
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 16,

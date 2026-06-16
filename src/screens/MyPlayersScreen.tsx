@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, ActivityIndicator, SafeAreaView, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, ScrollView } from 'react-native';
 import { supabase } from '../api/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { Player } from '../types';
+import { GameLayout } from '../components/Layout/GameLayout';
 
 interface MyPlayerRow {
   id: number;
@@ -117,7 +118,7 @@ const MyPlayersScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <GameLayout>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>MY CLUB</Text>
@@ -164,14 +165,14 @@ const MyPlayersScreen: React.FC = () => {
           }
         />
       )}
-    </SafeAreaView>
+    </GameLayout>
   );
 };
 
 export default MyPlayersScreen;
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#070707', paddingTop: 20 },
+  screen: { flex: 1, paddingTop: 20 },
   header: { marginBottom: 10, paddingHorizontal: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: '#ffffff', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
   subtitle: { color: '#b3b3b3', fontSize: 14, marginTop: 4 },

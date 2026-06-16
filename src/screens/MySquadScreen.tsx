@@ -1,9 +1,10 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, Pressable, ActivityIndicator, Alert, FlatList, Modal, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, FlatList, Modal, TextInput, TouchableOpacity } from 'react-native';
 import { supabase } from '../api/supabaseClient';
 import { useAuth } from '../context/AuthContext';
 import { PlayerCard } from '../components/Card/PlayerCard';
 import { Player } from '../types';
+import { GameLayout } from '../components/Layout/GameLayout';
 import { calculateSquadStats } from '../engine/ChemistryEngine';
 
 type PositionSlot = 'LW' | 'ST' | 'RW' | 'CM1' | 'CDM' | 'CM2' | 'LB' | 'CB1' | 'CB2' | 'RB' | 'GK';
@@ -208,7 +209,7 @@ const MySquadScreen: React.FC = () => {
 
   if (viewMode === 'LIST') {
     return (
-      <SafeAreaView style={styles.screen}>
+      <GameLayout>
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>MY SQUADS</Text>
@@ -254,7 +255,7 @@ const MySquadScreen: React.FC = () => {
           )}
           ListEmptyComponent={<Text style={styles.emptyText}>You haven't saved any squads yet.</Text>}
         />
-      </SafeAreaView>
+      </GameLayout>
     );
   }
 
@@ -265,7 +266,7 @@ const MySquadScreen: React.FC = () => {
   const { chemistry, ovr } = calculateSquadStats(activeSquad);
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <GameLayout>
       <View style={styles.pitchHeader}>
         <TouchableOpacity 
           style={styles.backButton} 
@@ -395,14 +396,14 @@ const MySquadScreen: React.FC = () => {
         </View>
       </Modal>
 
-    </SafeAreaView>
+    </GameLayout>
   );
 };
 
 export default MySquadScreen;
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#070707', paddingTop: 20 },
+  screen: { flex: 1, paddingTop: 20 },
   header: { paddingHorizontal: 16, marginBottom: 20, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   title: { color: '#ffffff', fontSize: 26, fontWeight: '900', letterSpacing: 1 },
   subtitle: { color: '#b3b3b3', fontSize: 14, marginTop: 4 },

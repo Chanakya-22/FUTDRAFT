@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -13,6 +12,7 @@ import { useMatchSim } from '../hooks/useMatchSim';
 import { calculateTeamOVR } from '../engine/MatchMath';
 import { Player } from '../types';
 import { useSquad } from '../context/SquadContext';
+import { GameLayout } from '../components/Layout/GameLayout';
 
 const mentalityOptions: Array<{ label: string; value: 'attack' | 'balanced' | 'defense' }> = [
   { label: 'Attack', value: 'attack' },
@@ -107,21 +107,21 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
 
   if (startingXI.length === 0) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <GameLayout>
         <View style={styles.statusContainer}>
           <Text style={styles.statusText}>No squad found. Please complete the draft first.</Text>
         </View>
-      </SafeAreaView>
+      </GameLayout>
     );
   }
 
   if (cpuLoading) {
     return (
-      <SafeAreaView style={styles.screen}>
+      <GameLayout>
         <View style={styles.statusContainer}>
           <Text style={styles.statusText}>Loading CPU squad...</Text>
         </View>
-      </SafeAreaView>
+      </GameLayout>
     );
   }
 
@@ -130,7 +130,7 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
     const rowLabel = penaltyTurn === 'user_shoot' ? 'Your shot' : 'Your save';
 
     return (
-      <SafeAreaView style={styles.screen}>
+      <GameLayout>
         <View style={styles.penaltyHeader}>
           <Text style={styles.penaltyTitle}>PENALTY SHOOTOUT</Text>
           <Text style={styles.penaltyScore}>
@@ -205,12 +205,12 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
               ))}
           </ScrollView>
         </View>
-      </SafeAreaView>
+      </GameLayout>
     );
   }
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <GameLayout>
       <View style={styles.scoreBox}>
         <View style={styles.scoreColumn}>
           <Text style={styles.scoreLabel}>USER</Text>
@@ -430,7 +430,7 @@ const MatchScreen: React.FC<MatchScreenProps> = ({ isActive = true }) => {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </GameLayout>
   );
 };
 
@@ -439,7 +439,6 @@ export default MatchScreen;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#070707',
     paddingHorizontal: 16,
     paddingVertical: 16,
   },

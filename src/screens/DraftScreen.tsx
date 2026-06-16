@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   FlatList,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import { PlayerCard } from '../components/Card/PlayerCard';
 import { useDraft } from '../hooks/useDraft';
 import { useSquad } from '../context/SquadContext';
 import { Player } from '../types';
+import { GameLayout } from '../components/Layout/GameLayout';
 
 const getSlotLabel = (slotIndex: number): string => {
   if (slotIndex === 0) {
@@ -105,7 +105,7 @@ const DraftScreen: React.FC = () => {
   }, [isDrafting, isFinished]);
 
   return (
-    <SafeAreaView style={styles.screen}>
+    <GameLayout>
       <View style={styles.header}>
         <Text style={styles.title}>DRAFT XI</Text>
         <Text style={styles.subtitle}>{secondaryText}</Text>
@@ -266,7 +266,7 @@ const DraftScreen: React.FC = () => {
           <Text style={styles.statusText}>Start the draft to choose your lineup one pick at a time.</Text>
         </View>
       ) : null}
-    </SafeAreaView>
+    </GameLayout>
   );
 };
 
@@ -275,7 +275,6 @@ export default DraftScreen;
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#0b0b0b',
     paddingHorizontal: 16,
     paddingTop: 20,
     paddingBottom: 16,
